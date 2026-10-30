@@ -1,0 +1,14 @@
+packages:
+  - 'packages/*'
+
+# checkride and fascicle are first-party (Rob publishes both); opt them out of the global
+# minimumReleaseAge guard so the repo can take their latest releases without the 48h delay.
+minimumReleaseAgeExclude:
+  - checkride
+  - fascicle
+
+# ast-grep and fallow ship native binaries through install scripts, which pnpm blocks
+# unless they are listed here.
+allowBuilds:
+  '@ast-grep/cli': true
+  fallow: true

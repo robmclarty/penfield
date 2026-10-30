@@ -1,1 +1,19 @@
+node_modules/
+dist/
+.check/
+.fallow/
+.stryker-tmp/
+coverage/
+*.log
+*.tsbuildinfo
 .DS_Store
+.pnpm-store/
+
+# local state and secrets: penfield.db with its WAL, and env files (tokens never live in the repo, C5)
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+CLAUDE.local.md

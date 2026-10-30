@@ -1,0 +1,14 @@
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    // Specs number their steps straight through the build ranges (step 5 opens range 2),
+    // and plans and reviews cite those numbers, so a list may start at any number.
+    "MD029": false,
+    "MD033": false,
+    "MD041": false,
+    "MD060": false
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["**/node_modules/**", "dist/**", ".check/**", "CHANGELOG.md", "**/test/fixtures/**"]
+}

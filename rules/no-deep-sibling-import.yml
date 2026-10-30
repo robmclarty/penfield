@@ -1,0 +1,21 @@
+id: no-deep-sibling-import
+message: |
+  Deep-module boundary: don't reach past a sibling module's index.
+  Use `import { ... } from '../<sibling>/index.js'` instead of
+  `'../<sibling>/<internal>.js'`.
+severity: error
+language: typescript
+files:
+  - '**/src/**/*.ts'
+ignores:
+  - '**/test/fixtures/**'
+rule:
+  all:
+    - kind: import_statement
+    - regex: "from\\s+['\"](\\.\\./)+[^./][^/]*/[^'\"]+['\"]"
+    - not:
+        regex: "from\\s+['\"](\\.\\./)+[^./][^/]*/index\\.js['\"]"
+    # test/ isn't a sibling module. src-never-imports-test decides whether
+    # code may import from it.
+    - not:
+        regex: "from\\s+['\"](\\.\\./)+test/"

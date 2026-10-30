@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/robmclarty/checkride/v0.19.1/schema/checkride.config.schema.json",
+  "checks": {
+    "types": "tsc",
+    "lint": "oxlint",
+    "struct": "ast-grep",
+    "dead": "fallow",
+    "test": "vitest",
+    "docs": "markdownlint-cli2",
+    "links": "links",
+    "spell": "cspell",
+    "typecheck-tests": {
+      "command": "pnpm",
+      "args": [
+        "exec",
+        "tsc",
+        "-p",
+        "tsconfig.test.json"
+      ],
+      "description": "Type-check the tests outside src/",
+      "note": "tsconfig.json covers src/ alone, and vitest runs a test without type-checking it, so this is what type-checks test/."
+    }
+  }
+}

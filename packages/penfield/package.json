@@ -1,0 +1,13 @@
+{
+  "name": "penfield",
+  "version": "0.0.0",
+  "description": "The penfield service: catalogue, prober, router, placement and the streaming proxy.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

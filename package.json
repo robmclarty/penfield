@@ -1,0 +1,39 @@
+{
+  "name": "penfield-workspace",
+  "version": "0.0.0",
+  "description": "A model gateway and router for the house: one settings file, OpenAI and Anthropic wire formats, routing by rules to resident local models or a Claude decision.",
+  "author": "Rob McLarty",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.28.5",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "check": "checkride",
+    "check:all": "checkride --all",
+    "check:json": "checkride --json",
+    "check:bail": "checkride --bail",
+    "check:changed": "checkride --changed",
+    "check:fix": "checkride fix",
+    "doctor": "checkride doctor",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc --build",
+    "types": "tsc --build"
+  },
+  "devDependencies": {
+    "@ast-grep/cli": "0.51.0",
+    "@types/node": "24.19.2",
+    "@vitest/coverage-v8": "5.0.5",
+    "checkride": "0.19.1",
+    "cspell": "10.4.0",
+    "fallow": "3.36.0",
+    "markdownlint-cli2": "0.24.0",
+    "oxlint": "1.89.0",
+    "oxlint-tsgolint": "7.0.2005",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

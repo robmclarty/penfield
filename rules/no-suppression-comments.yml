@@ -1,0 +1,14 @@
+id: no-suppression-comments
+message: |
+  C7: fix the finding rather than silence it. No `@ts-ignore` or `@ts-nocheck`,
+  and no oxlint, eslint, fallow or ast-grep suppression comments.
+note: |
+  `@ts-expect-error` is allowed: it fails the build when the error it expects
+  goes away, so it can't hide a finding.
+severity: error
+language: typescript
+ignores:
+  - '**/test/fixtures/**'
+rule:
+  kind: comment
+  regex: '@ts-(ignore|nocheck)|(oxlint|eslint)-disable|fallow-ignore|ast-grep-ignore'

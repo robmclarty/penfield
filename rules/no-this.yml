@@ -1,0 +1,11 @@
+id: no-this
+message: |
+  C6: functional and procedural TypeScript, no `this`. Pass state as an
+  argument or close over it.
+note: '`no-class` covers `class` and `extends`; this rule and `no-decorator` cover the rest of C6.'
+severity: error
+language: typescript
+ignores:
+  - '**/test/fixtures/**'
+rule:
+  kind: this

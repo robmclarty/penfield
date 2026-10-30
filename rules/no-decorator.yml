@@ -1,0 +1,8 @@
+id: no-decorator
+message: 'C6: no decorators. Wrap with a plain function instead.'
+severity: error
+language: typescript
+ignores:
+  - '**/test/fixtures/**'
+rule:
+  kind: decorator

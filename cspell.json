@@ -1,0 +1,26 @@
+{
+  "version": "0.2",
+  "language": "en,en-GB",
+  "unknownWords": "report-common-typos",
+  "files": [
+    "**/src/**/*.ts",
+    "**/test/**/*.ts",
+    "**/*.md"
+  ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/dist/**",
+    ".check/**",
+    "pnpm-lock.yaml",
+    "package.json",
+    "CHANGELOG.md",
+    "**/test/fixtures/**"
+  ],
+  "ignoreRegExpList": [
+    "/v1[0-9a-f]{16}/g"
+  ],
+  "words": [
+    "criticals",
+    "penfield"
+  ]
+}
