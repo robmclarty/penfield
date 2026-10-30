@@ -1,0 +1,27 @@
+id: no-subscription-login
+message: |
+  C2: penfield never reads, stores, forwards or logs a Claude subscription
+  credential: an OAuth token (`sk-ant-oat…`), `CLAUDE_CODE_OAUTH_TOKEN`, or
+  Claude Code's credentials file or keychain entry. A Claude target is a
+  decision the requester's own client runs under its own login (D17); the only
+  Anthropic credential the gateway may hold is the `anthropic_api` target's
+  API key (D18).
+note: |
+  Matches the names in strings, template strings, identifiers and property
+  names, in every TypeScript file, tests and fixtures included: C2 says
+  "anywhere in this codebase". Comments are not matched, so code may still
+  say what it refuses.
+severity: error
+language: typescript
+rule:
+  any:
+    - kind: string_fragment
+      regex: 'CLAUDE_CODE_OAUTH|sk-ant-oat|\.credentials\.json|Claude Code-credentials'
+    - kind: identifier
+      regex: '^CLAUDE_CODE_OAUTH'
+    - kind: property_identifier
+      regex: '^CLAUDE_CODE_OAUTH'
+    - kind: shorthand_property_identifier
+      regex: '^CLAUDE_CODE_OAUTH'
+    - kind: shorthand_property_identifier_pattern
+      regex: '^CLAUDE_CODE_OAUTH'

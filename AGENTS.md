@@ -72,7 +72,7 @@ change is most likely to break:
   candidate.
 - **C2, no subscription credential, anywhere.** Never read, store, forward or log a
   Claude OAuth token or session file; a Claude target is a decision, not an execution.
-  The `no-subscription-credentials` rule blocks the names.
+  The `no-subscription-login` rule blocks the names.
 - **C3, no model call in placement.** The classifier rung (Stage C) is the only model
   call in the routing path.
 - **C4, stream, never buffer.** Read the request body once; pipe the response.
