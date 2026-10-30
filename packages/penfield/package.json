@@ -1,6 +1,6 @@
 {
   "name": "penfield",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "The penfield service: catalogue, prober, router, placement and the streaming proxy.",
   "private": true,
   "type": "module",

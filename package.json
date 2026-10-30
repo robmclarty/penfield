@@ -1,6 +1,6 @@
 {
   "name": "penfield-workspace",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "A model gateway and router for the house: one settings file, OpenAI and Anthropic wire formats, routing by rules to resident local models or a Claude decision.",
   "author": "Rob McLarty",
   "type": "module",
