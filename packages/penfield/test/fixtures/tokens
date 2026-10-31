@@ -1,0 +1,6 @@
+# The callers of deploy/penfield.example.yaml, one `caller: token` line each (C5).
+# Fake tokens are tok_<caller>_<hex> (C15).
+rob: tok_rob_5f2a9c1e
+zed-native: tok_zed-native_7b3d0e4a
+night-shift: tok_night-shift_1c8e6f2b
+nurselog: tok_nurselog_9a4b7d3c

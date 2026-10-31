@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 6 — feat(probe): liveness, readiness, breaker and incidents (spec step 7)
+**Current step:** 7 — feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -28,7 +28,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 3. feat(cli): serve boots, binds the LAN address and answers /healthz (spec step 4)
 - ☑ 4. feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
 - ☑ 5. feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
-- ☐ 6. feat(probe): liveness, readiness, breaker and incidents (spec step 7)
+- ☑ 6. feat(probe): liveness, readiness, breaker and incidents (spec step 7)
 - ☐ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
 - ☐ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
 - ☐ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
@@ -189,3 +189,4 @@ folder, so it rides the branch into the PR.)*
 
 - 2026-10-31 — step 4 checkpointed · 98dc0ce57 — feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5) (1 drift, 5m)
 - 2026-10-31 — step 5 checkpointed · 8c4fe77f2 — feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6) (4m)
+- 2026-10-31 — step 6 checkpointed · ed7d7697a — feat(probe): liveness, readiness, breaker and incidents (spec step 7) (1 drift, 7m)

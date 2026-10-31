@@ -9,3 +9,10 @@ export type Clock = {
   after: (ms: number, run: () => void) => () => void;
 };
 
+export const system_clock: Clock = {
+  now: () => Date.now(),
+  after: (ms, run) => {
+    const timer = setTimeout(run, ms);
+    return () => clearTimeout(timer);
+  },
+};

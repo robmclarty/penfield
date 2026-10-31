@@ -1,9 +1,14 @@
 import { fastify } from 'fastify';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
-import type { Listen } from '../config/index.js';
-import { healthz_body } from './healthz.js';
-import type { NodeHealth } from './healthz.js';
+import type { Catalogue } from '../catalogue/index.js';
+import type { Config, Listen } from '../config/index.js';
+import { catalogue_body } from '../ui/index.js';
+import type { InUse } from '../ui/index.js';
+import { authenticate, unauthorized } from './auth.js';
+import type { Caller, Tokens } from './auth.js';
+import { healthz_body, node_health } from './healthz.js';
+import { models_list } from './openai.js';
 
 // The HTTP server. It binds what `serve` resolved and holds the routes; each route
 // gets what it reads as an argument, never from a module-level singleton (C6).
@@ -16,11 +21,48 @@ export const check_bind = (host: string, allow_any_interface: boolean): string |
     ? `refusing to listen on ${host}, every interface (C5): name the LAN address, or pass --allow-any-interface`
     : undefined;
 
-export type ServerDeps = { node_states: () => readonly NodeHealth[] };
+// The routes a request without a caller token may reach (C5); every other path,
+// an unknown one included, needs a caller first.
+const PUBLIC = new Set(['/healthz']);
+
+export type ServerDeps = {
+  config: Config;
+  tokens: Tokens;
+  snapshot: () => Catalogue;
+  in_use: () => InUse;
+};
 
 export const create_server = (deps: ServerDeps): FastifyInstance => {
   const app = fastify({ logger: false });
-  app.get('/healthz', (_request, reply) => reply.send(healthz_body(deps.node_states())));
+  const callers = new WeakMap<FastifyRequest, Caller>();
+
+  app.addHook('onRequest', async (request, reply) => {
+    if (PUBLIC.has(request.routeOptions.url ?? '')) return;
+    const header = request.headers.authorization;
+    const caller = authenticate(deps.tokens, deps.config.callers, header);
+    if (caller !== undefined) {
+      callers.set(request, caller);
+      return;
+    }
+    const message =
+      header === undefined
+        ? 'penfield needs a caller token: send Authorization: Bearer <token>'
+        : 'penfield does not know that token';
+    await reply.code(401).send(unauthorized(message));
+  });
+
+  // Every route but the public ones runs after the hook has found its caller.
+  const caller_of = (request: FastifyRequest): Caller => {
+    const caller = callers.get(request);
+    if (caller === undefined) throw new Error(`no caller for ${request.url}`);
+    return caller;
+  };
+
+  app.get('/healthz', (_request, reply) => reply.send(healthz_body(node_health(deps.snapshot()))));
+  app.get('/v1/models', (request, reply) =>
+    reply.send(models_list(deps.snapshot(), deps.config, caller_of(request))),
+  );
+  app.get('/catalogue', (_request, reply) => reply.send(catalogue_body(deps.snapshot(), deps.in_use())));
   return app;
 };
 

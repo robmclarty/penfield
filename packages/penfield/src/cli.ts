@@ -2,10 +2,13 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { create_catalogue } from './catalogue/index.js';
+import { system_clock } from './clock.js';
 import { check_config, format_issues, parse_listen, read_config } from './config/index.js';
 import type { Config, Listen } from './config/index.js';
-import { open_db } from './log/index.js';
-import { check_bind, create_server, start_server, unknown_states } from './wire/index.js';
+import { log_incident, open_db } from './log/index.js';
+import { create_prober } from './probe/index.js';
+import { check_bind, create_server, read_tokens, start_server } from './wire/index.js';
 
 // The `penfield` bin. `run_cli` takes its arguments, environment, output streams and
 // stop signal as values, so tests drive it in-process; the guard at the bottom wires
@@ -81,13 +84,16 @@ const with_overrides = (config: Config, flags: ServeFlags): Config => ({
   },
 });
 
-const banner = (address: string, file: string, config: Config, instance_id: string): string =>
+type Resolved = { file: string; config: Config; listen: Listen; tokens: ReadonlyMap<string, string> };
+
+const banner = ({ file, config, tokens }: Resolved, address: string, instance_id: string): string =>
   [
     `penfield listening on ${address}`,
     `  config       ${resolve(file)}`,
     `  instance     ${instance_id}`,
     `  state_dir    ${config.server.state_dir}`,
     `  tokens_file  ${config.server.tokens_file}`,
+    `  callers      ${[...new Set(tokens.values())].toSorted().join(', ') || 'none: every request but /healthz is refused'}`,
     '',
   ].join('\n');
 
@@ -98,11 +104,8 @@ const stopped = (signal: AbortSignal | undefined): Promise<void> =>
   });
 
 // Everything `serve` checks before it opens a file or a socket: the config, the
-// overrides and the C5 bind. A string is the refusal to print.
-const resolve_serve = async (
-  flags: ServeFlags,
-  ctx: CliContext,
-): Promise<{ file: string; config: Config; listen: Listen } | string> => {
+// overrides, the C5 bind and the tokens file. A string is the refusal to print.
+const resolve_serve = async (flags: ServeFlags, ctx: CliContext): Promise<Resolved | string> => {
   const file = config_path(undefined, flags.config, ctx.env);
   if (file === undefined) return NO_CONFIG;
   const loaded = await read_config(file);
@@ -111,7 +114,10 @@ const resolve_serve = async (
   const listen = parse_listen(config.server.listen);
   if (listen === undefined) return `penfield: listen "${config.server.listen}" is not host:port\n`;
   const refusal = check_bind(listen.host, flags['allow-any-interface'] === true);
-  return refusal === undefined ? { file, config, listen } : `penfield: ${refusal}\n`;
+  if (refusal !== undefined) return `penfield: ${refusal}\n`;
+  const tokens = await read_tokens(config.server.tokens_file, config.callers);
+  if (!tokens.ok) return tokens.issues.map((issue) => `${issue}\n`).join('');
+  return { file, config, listen, tokens: tokens.tokens };
 };
 
 const run_serve = async (args: string[], ctx: CliContext): Promise<number> => {
@@ -121,15 +127,27 @@ const run_serve = async (args: string[], ctx: CliContext): Promise<number> => {
     ctx.err.write(resolved);
     return 1;
   }
-  const { file, config, listen } = resolved;
+  const { config, listen, tokens } = resolved;
   const db = open_db(config.server.state_dir);
-  const app = create_server({ node_states: () => unknown_states(config) });
+  const catalogue = create_catalogue(config);
+  const prober = create_prober({
+    config,
+    env: ctx.env,
+    catalogue,
+    clock: system_clock,
+    incident: (incident) => void log_incident(db, incident),
+    on_error: (error) => void ctx.err.write(`penfield: probe: ${error instanceof Error ? error.message : String(error)}\n`),
+  });
+  // No leases until plan step 10, so nothing is in use.
+  const app = create_server({ config, tokens, snapshot: catalogue.snapshot, in_use: () => ({}) });
   try {
     const address = await start_server(app, listen);
-    ctx.out.write(banner(address, file, config, db.instance_id));
+    ctx.out.write(banner(resolved, address, db.instance_id));
+    prober.start();
     await stopped(ctx.signal);
     return 0;
   } finally {
+    prober.stop();
     await app.close();
     db.close();
   }

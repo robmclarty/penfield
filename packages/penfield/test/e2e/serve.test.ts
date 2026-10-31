@@ -1,74 +1,18 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { run_cli } from '../../src/cli.js';
+import type { FakeOllama } from '../helpers/fake_ollama.js';
+import { start_fake_ollama } from '../helpers/fake_ollama.js';
+import { booted, collector, EXAMPLE, house_config, serve, TOKENS } from '../helpers/run_serve.js';
+import type { Running } from '../helpers/run_serve.js';
 
-// `penfield serve` and `check-config` through the bin's own entry, in-process: the
-// arguments, environment and streams are values, so no build is needed and the
-// CLI's lines count toward coverage.
-
-const EXAMPLE = fileURLToPath(new URL('../../../../deploy/penfield.example.yaml', import.meta.url));
-
-type Collector = { text: () => string; write: (chunk: string) => boolean; until: (pattern: RegExp) => Promise<string> };
-
-// A stream that keeps what was written, and resolves `until` with a pattern's first
-// group once the text matches it.
-const collector = (): Collector => {
-  let text = '';
-  let waiting: (() => void)[] = [];
-  const until = (pattern: RegExp): Promise<string> =>
-    new Promise((found) => {
-      const look = (): void => {
-        const match = pattern.exec(text);
-        if (match === null) waiting.push(look);
-        else found(match[1] ?? match[0]);
-      };
-      look();
-    });
-  return {
-    text: () => text,
-    write: (chunk) => {
-      text += chunk;
-      const woken = waiting;
-      waiting = [];
-      for (const look of woken) look();
-      return true;
-    },
-    until,
-  };
-};
-
-type Running = { out: Collector; err: Collector; exit: Promise<number>; stop: () => Promise<number> };
-
-const serve = (args: string[], env: Record<string, string> = {}): Running => {
-  const out = collector();
-  const err = collector();
-  const control = new AbortController();
-  const exit = run_cli(['serve', ...args], { env, out, err, signal: control.signal });
-  return {
-    out,
-    err,
-    exit,
-    stop: () => {
-      control.abort();
-      return exit;
-    },
-  };
-};
-
-const LISTENING = /^penfield listening on (\S+)$/m;
-
-// The bound address from the banner, or the exit code and stderr if serve gave up.
-const booted = (running: Running): Promise<string> => {
-  const gave_up = running.exit.then((code) => {
-    throw new Error(`serve exited ${code}: ${running.err.text()}`);
-  });
-  return Promise.race([running.out.until(LISTENING), gave_up]);
-};
+// `penfield serve` and `check-config` through the bin's own entry, in-process. A
+// boot runs the house config with searle on a fake Ollama, so no test reaches the
+// real one, and the tokens fixture as its tokens file.
 
 const instance = (running: Running): string => /instance {5}(\S+)/.exec(running.out.text())?.[1] ?? '';
 
@@ -81,6 +25,8 @@ const run = async (argv: string[], env: Record<string, string> = {}) => {
 
 let dir = '';
 let state_dir = '';
+let house = '';
+let ollama: FakeOllama;
 let servers: Running[] = [];
 
 const start = (args: string[], env: Record<string, string> = {}): Running => {
@@ -95,50 +41,55 @@ const write_config = (name: string, text: string): string => {
   return file;
 };
 
-beforeEach(() => {
+// What every boot on the laptop passes, D29's overrides.
+const laptop = (): string[] => ['--listen', '127.0.0.1:0', '--state-dir', state_dir, '--tokens-file', TOKENS];
+
+beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'penfield-serve-'));
   state_dir = join(dir, 'state');
   servers = [];
+  ollama = await start_fake_ollama({ tags: ['qwen3.8:27b-mlx'], resident: ['qwen3.8:27b-mlx'] });
+  house = house_config(dir, ollama.url);
 });
 
 afterEach(async () => {
   await Promise.all(servers.map((running) => running.stop()));
+  await ollama.close();
   rmSync(dir, { recursive: true, force: true });
 });
 
 describe('serve', () => {
   test("boots on the laptop from the house config, D29's overrides applied, and answers /healthz", async () => {
-    const tokens_file = join(dir, 'tokens');
-    const running = start([
-      '--config', EXAMPLE,
-      '--listen', '127.0.0.1:0',
-      '--state-dir', state_dir,
-      '--tokens-file', tokens_file,
-    ]);
+    const running = start(['--config', house, ...laptop()]);
     const address = await booted(running);
     expect(address).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     expect(running.out.text()).toMatch(
       new RegExp(
         [
           `^penfield listening on ${address}`,
-          `  config       ${resolve(EXAMPLE)}`,
+          `  config       ${resolve(house)}`,
           '  instance     [\\da-f]{8}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{12}',
           `  state_dir    ${state_dir}`,
-          `  tokens_file  ${tokens_file}`,
+          `  tokens_file  ${TOKENS}`,
+          '  callers      night-shift, nurselog, rob, zed-native',
           '$',
         ].join('\\n'),
       ),
     );
 
-    const response = await fetch(`${address}/healthz`);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      status: 'ok',
-      nodes: [
-        { name: 'searle', kind: 'ollama', state: 'unknown' },
-        { name: 'claude', kind: 'claude_decision', state: 'unknown' },
-      ],
+    // The prober reads searle at boot; until then it is unknown.
+    await vi.waitFor(async () => {
+      const response = await fetch(`${address}/healthz`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        status: 'ok',
+        nodes: [
+          { name: 'searle', kind: 'ollama', state: 'up', breaker: 'closed' },
+          { name: 'claude', kind: 'claude_decision', state: 'up', breaker: 'closed' },
+        ],
+      });
     });
+    expect(ollama.requests.map(({ url }) => url)).toContain('/api/version');
     expect(existsSync(join(state_dir, 'penfield.db'))).toBe(true);
 
     expect(await running.stop()).toBe(0);
@@ -146,25 +97,29 @@ describe('serve', () => {
   });
 
   test('reads the config path from PENFIELD_CONFIG', async () => {
-    const running = start(['--listen', '127.0.0.1:0', '--state-dir', state_dir], { PENFIELD_CONFIG: EXAMPLE });
+    const running = start(laptop(), { PENFIELD_CONFIG: house });
     expect(await booted(running)).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
   });
 
   test('--config beats PENFIELD_CONFIG', async () => {
-    const running = start(['--config', EXAMPLE, '--listen', '127.0.0.1:0', '--state-dir', state_dir], {
-      PENFIELD_CONFIG: join(dir, 'missing.yaml'),
-    });
+    const running = start(['--config', house, ...laptop()], { PENFIELD_CONFIG: join(dir, 'missing.yaml') });
     await booted(running);
-    expect(running.out.text()).toContain(`config       ${resolve(EXAMPLE)}`);
+    expect(running.out.text()).toContain(`config       ${resolve(house)}`);
   });
 
   test('a new boot mints a new instance id over the same state dir', async () => {
-    const first = start(['--config', EXAMPLE, '--listen', '127.0.0.1:0', '--state-dir', state_dir]);
+    const first = start(['--config', house, ...laptop()]);
     await booted(first);
     await first.stop();
-    const second = start(['--config', EXAMPLE, '--listen', '127.0.0.1:0', '--state-dir', state_dir]);
+    const second = start(['--config', house, ...laptop()]);
     await booted(second);
     expect(instance(second)).not.toBe(instance(first));
+  });
+
+  test('an empty tokens file boots, and says every request but /healthz is refused', async () => {
+    const running = start(['--config', house, ...laptop(), '--tokens-file', write_config('tokens', '# none yet\n')]);
+    await booted(running);
+    expect(running.out.text()).toContain('  callers      none: every request but /healthz is refused\n');
   });
 });
 
@@ -205,6 +160,20 @@ describe('serve refuses', () => {
     const running = start(['--config', file]);
     expect(await running.exit).toBe(1);
     expect(running.err.text()).toBe(`${file}:3:58 nodes.searle.slot: unknown key "slot"\n`);
+  });
+
+  test('a tokens file that is missing, before it opens the state dir', async () => {
+    const running = start(['--config', house, '--listen', '127.0.0.1:0', '--state-dir', state_dir, '--tokens-file', join(dir, 'nope')]);
+    expect(await running.exit).toBe(1);
+    expect(running.err.text()).toMatch(new RegExp(`^${join(dir, 'nope')} cannot read the tokens file: ENOENT`));
+    expect(existsSync(state_dir)).toBe(false);
+  });
+
+  test('a tokens file naming a caller penfield.yaml lacks, with its line', async () => {
+    const tokens = write_config('tokens', 'rob: tok_rob_5f2a9c1e\nbob: tok_bob_0d1e2f3a\n');
+    const running = start(['--config', house, '--listen', '127.0.0.1:0', '--state-dir', state_dir, '--tokens-file', tokens]);
+    expect(await running.exit).toBe(1);
+    expect(running.err.text()).toBe(`${tokens}:2 caller "bob" is not in penfield.yaml's callers\n`);
   });
 
   test('an option it does not know', async () => {
