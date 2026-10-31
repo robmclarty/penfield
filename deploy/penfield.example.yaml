@@ -1,0 +1,83 @@
+# penfield.yaml for the house: plato runs the gateway, searle runs the models.
+# The playbook's §4 walks through it; the spec's §5.1 is the full schema, and
+# `penfield check-config` prints this file with every default applied.
+# Things that are yours to tune are marked.
+version: 1
+server:
+  listen: 192.168.1.89:7777
+  name: penfield
+  state_dir: /var/lib/penfield
+  tokens_file: /etc/penfield/tokens
+
+nodes:
+  searle:
+    kind: ollama
+    url: http://192.168.1.90:11434
+    privacy: lan
+    discover: true
+    memory_gb: 48
+    slots: { default: 2, "qwen3.8:27b-mlx": 1 }      # tune: the 27B dense is slow; one at a time
+    pinned: [qwen3.8:27b-mlx]                        # nurselog depends on it being warm
+    probe: { every_ms: 10000, timeout_ms: 3000, ready_prompt: true }
+    recover: { unload_on_hang: true }
+  claude:
+    kind: claude_decision
+    privacy: cloud
+    models: [haiku, sonnet, opus]
+  # openrouter: enable later if you want a cloud fallback the gateway can execute itself
+  # anthropic: Stage D
+
+models:
+  "qwen3.8:27b*":       { profiles: [code-light, reason, chat, summarize], speed: slow, quality: high, context: 65536 }
+  "qwen3.6:35b*":       { profiles: [code-light, chat, summarize, extract], speed: fast, quality: medium, context: 65536 }
+  "gemma4:26b*":        { profiles: [chat, summarize, classify], speed: fast, quality: medium }
+  "gemma4:e4b*":        { profiles: [classify, extract, route], speed: fastest, quality: low }
+  "qwen3:4b-instruct*": { profiles: [classify, extract, route], speed: fastest, quality: low }
+  "glm-4.7-flash*":     { profiles: [summarize, extract], speed: fast, quality: medium }
+  "nomic-embed-text*":  { profiles: [embed] }
+  "qwen3-embedding*":   { profiles: [embed] }
+  "claude/opus":        { profiles: [code-heavy, reason], quality: frontier, cost: high }
+  "claude/sonnet":      { profiles: [code-heavy, code-light, chat], quality: frontier, cost: medium }
+  "claude/haiku":       { profiles: [chat, summarize, classify], quality: high, cost: low }
+
+profiles:
+  embed:      { candidates: [nomic-embed-text, qwen3-embedding:0.6b] }
+  classify:   { candidates: [qwen3:4b-instruct-2507, gemma4:e4b] }
+  extract:    { candidates: [qwen3.6:35b-mlx, qwen3:4b-instruct-2507] }
+  summarize:  { candidates: [qwen3.6:35b-mlx, gemma4:26b, qwen3.8:27b-mlx] }
+  chat:       { candidates: [qwen3.6:35b-mlx, qwen3.8:27b-mlx, claude/sonnet@low] }
+  code-light: { candidates: [qwen3.8:27b-mlx, qwen3.6:35b-mlx, claude/sonnet@medium] }
+  code-heavy: { candidates: [claude/opus@high, claude/sonnet@high, qwen3.8:27b-mlx] }
+  reason:     { candidates: [claude/opus@xhigh, qwen3.8:27b-mlx] }
+
+aliases:
+  auto:         { ladder: default }
+  auto/fast:    { ladder: default, prefer: speed }
+  auto/private: { ladder: default, max_privacy: lan }
+  auto/best:    { ladder: default, prefer: quality }
+
+policy:
+  precedence: [privacy, quality, speed, cost]
+  confidence_threshold: 0.7
+  cold_load: avoid
+  busy: { default: degrade, wait_ms: 5000 }
+  on_claude_for_proxy: hint
+  stall_ms: { default: 30000, first_token_cold: 90000, code-light: 60000, code-heavy: 120000 }
+  deadline_ms: { default: 600000 }
+
+router:
+  rules:
+    - { when: { endpoint: embeddings }, profile: embed }
+    - { when: { hint: present }, profile: $hint }
+    - { when: { tools: true, tokens_gt: 12000 }, profile: code-heavy }
+    - { when: { tools: true }, profile: code-light }
+    - { when: { attachments: code, tokens_gt: 4000 }, profile: code-light }
+    - { when: { tokens_gt: 24000 }, profile: summarize }
+    - { when: { system_matches: "(?i)classif|categori|label" }, profile: classify }
+    - { when: { chat: true }, profile: chat }
+
+callers:
+  rob:          { max_privacy: cloud, claude: decision, priority: interactive, keep_prompts: true }
+  zed-native:   { max_privacy: cloud, claude: hint, priority: interactive }
+  night-shift:  { max_privacy: lan, priority: batch, busy: wait, wait_ms: 120000 }
+  nurselog:     { max_privacy: lan, priority: interactive, models: [qwen3.8:27b-mlx, nomic-embed-text] }

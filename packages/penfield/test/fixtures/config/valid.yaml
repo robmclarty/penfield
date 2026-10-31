@@ -1,0 +1,97 @@
+# The spec's §5.1 example, verbatim: every section of penfield.yaml, Stage C and D keys included.
+version: 1
+server:
+  listen: 192.168.1.89:7777        # LAN interface only (C5)
+  name: penfield
+  state_dir: /var/lib/penfield        # penfield.db lives here
+  tokens_file: /etc/penfield/tokens   # caller: token, one per line
+
+nodes:
+  searle:
+    kind: ollama                   # ollama | openai_compatible | anthropic_api | claude_decision
+    url: http://192.168.1.90:11434
+    privacy: lan                   # local | lan | cloud
+    formats: [openai, anthropic]   # what it accepts on the wire; discovered defaults per kind
+    discover: true                 # /api/tags + /api/ps every probe tick
+    memory_gb: 48
+    slots: { default: 2, "qwen3.8:27b-mlx": 1 }
+    pinned: [qwen3.8:27b-mlx]
+    probe: { every_ms: 10000, timeout_ms: 3000, ready_prompt: true }
+    recover:                       # §6, all off unless listed
+      unload_on_hang: true
+      command: null                # e.g. "ssh searle 'brew services restart ollama'" (Stage D, approval-gated)
+  openrouter:
+    kind: openai_compatible
+    url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    privacy: cloud
+    discover: false
+    models: [openrouter/auto, anthropic/claude-sonnet-5.5]
+  claude:
+    kind: claude_decision
+    privacy: cloud
+    models: [haiku, sonnet, opus]
+    efforts: [low, medium, high, xhigh, max]
+  anthropic:
+    kind: anthropic_api
+    enabled: false
+    api_key_env: ANTHROPIC_API_KEY
+    privacy: cloud
+
+models:                            # metadata overlay by glob, first match wins
+  "qwen3.8:27b*":   { profiles: [code-light, reason, chat, summarize], speed: slow,   quality: high,   context: 65536 }
+  "qwen3.6:35b*":   { profiles: [code-light, chat, summarize, extract], speed: fast,  quality: medium, context: 65536 }
+  "gemma4:26b*":    { profiles: [chat, summarize, classify],            speed: fast,  quality: medium }
+  "qwen3:4b-instruct*": { profiles: [classify, extract, route],         speed: fastest, quality: low }
+  "nomic-embed-text*":  { profiles: [embed] }
+  "qwen3-embedding*":   { profiles: [embed] }
+  "claude/opus":    { profiles: [code-heavy, reason], quality: frontier, cost: high }
+  "claude/sonnet":  { profiles: [code-heavy, code-light, chat], quality: frontier, cost: medium }
+  "claude/haiku":   { profiles: [chat, summarize, classify], quality: high, cost: low }
+
+profiles:                          # ranked candidates; "node/model@effort" or "model" (any node that has it)
+  embed:      { candidates: [nomic-embed-text, qwen3-embedding:0.6b] }
+  classify:   { candidates: [qwen3:4b-instruct-2507, gemma4:e4b] }
+  extract:    { candidates: [qwen3.6:35b-mlx, qwen3:4b-instruct-2507] }
+  summarize:  { candidates: [qwen3.6:35b-mlx, gemma4:26b, qwen3.8:27b-mlx] }
+  chat:       { candidates: [qwen3.6:35b-mlx, qwen3.8:27b-mlx, claude/sonnet@low] }
+  code-light: { candidates: [qwen3.8:27b-mlx, qwen3.6:35b-mlx, claude/sonnet@medium] }
+  code-heavy: { candidates: [claude/opus@high, claude/sonnet@high, qwen3.8:27b-mlx] }
+  reason:     { candidates: [claude/opus@xhigh, qwen3.8:27b-mlx] }
+
+aliases:
+  auto:         { ladder: default }
+  auto/fast:    { ladder: default, prefer: speed }
+  auto/private: { ladder: default, max_privacy: lan }
+  auto/best:    { ladder: default, prefer: quality }
+  # a profile name is also an alias: model "summarize" routes to that profile
+
+policy:
+  precedence: [privacy, quality, speed, cost]
+  confidence_threshold: 0.7
+  cold_load: avoid                 # allow | avoid | never
+  busy: { default: degrade, wait_ms: 5000 }
+  on_claude_for_proxy: hint        # hint | downgrade | api_key
+  stall_ms: { default: 30000, first_token_cold: 90000, code-light: 60000, code-heavy: 120000 }
+  deadline_ms: { default: 600000 }
+
+router:
+  rules:                           # evaluated in order; first match wins
+    - { when: { endpoint: embeddings }, profile: embed }
+    - { when: { endpoint: audio_transcriptions }, profile: stt }
+    - { when: { hint: present }, profile: $hint }          # x-penfield-profile header or metadata.penfield.profile
+    - { when: { tools: true, tokens_gt: 12000 }, profile: code-heavy }
+    - { when: { tools: true }, profile: code-light }
+    - { when: { attachments: code, tokens_gt: 4000 }, profile: code-light }
+    - { when: { tokens_gt: 24000 }, profile: summarize }
+    - { when: { system_matches: "(?i)classif|categori|label" }, profile: classify }
+    - { when: { chat: true }, profile: chat }              # falls to embedding/classifier rungs when below threshold
+  exemplars: ./profiles            # Stage C: one markdown file per profile with example prompts
+  embedder: nomic-embed-text       # Stage C
+  classifier: qwen3:4b-instruct-2507   # Stage C
+
+callers:
+  rob:          { max_privacy: cloud, claude: decision, priority: interactive, keep_prompts: true }
+  zed-native:   { max_privacy: cloud, claude: hint, priority: interactive }
+  night-shift:  { max_privacy: lan, priority: batch, busy: wait, wait_ms: 120000 }
+  nurselog:     { max_privacy: lan, priority: interactive, models: [qwen3.8:27b-mlx, nomic-embed-text] }

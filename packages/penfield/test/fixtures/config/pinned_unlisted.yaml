@@ -1,0 +1,10 @@
+# A node that does not discover pins a model its own list lacks: a load failure (D41).
+version: 1
+nodes:
+  closet:
+    kind: openai_compatible
+    url: http://192.168.1.95:8080/v1
+    privacy: lan
+    discover: false
+    models: [gemma4:26b]
+    pinned: [qwen3.8:27b-mlx]

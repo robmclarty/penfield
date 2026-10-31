@@ -6,6 +6,7 @@ ignorePatterns = ["**/test/fixtures/**"]
 
 entry = [
   "packages/*/src/index.ts",
+  "packages/*/src/cli.ts",
   "packages/*/src/**/*.test.ts",
   "packages/*/test/**/*.test.ts",
 ]

@@ -1,0 +1,9 @@
+# An alias routes to a profile the file does not define: a load failure (D41).
+version: 1
+nodes:
+  searle: { kind: ollama, url: http://192.168.1.90:11434, privacy: lan }
+profiles:
+  summarize: { candidates: [qwen3.6:35b-mlx] }
+aliases:
+  auto: { ladder: default }
+  digest: { profile: summarise }
