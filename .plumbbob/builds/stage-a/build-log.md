@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 4 — feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
+**Current step:** 5 — feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -26,7 +26,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 1. feat(config): zod schema, loader and check-config (spec step 2)
 - ☑ 2. feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3)
 - ☑ 3. feat(cli): serve boots, binds the LAN address and answers /healthz (spec step 4)
-- ☐ 4. feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
+- ☑ 4. feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
 - ☐ 5. feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
 - ☐ 6. feat(probe): liveness, readiness, breaker and incidents (spec step 7)
 - ☐ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
@@ -185,3 +185,5 @@ folder, so it rides the branch into the PR.)*
   **5.** The bin runs in-process under test
 
   `run_cli` takes argv, env, the output streams and a stop signal as values, so the e2e drives `serve` and `check-config` through the bin's own entry with no build step. That puts `cli.ts` at 91 % coverage instead of the 0 % a spawned binary would give. By hand, the built `dist/cli.js` served `/healthz` on the laptop and exited cleanly on SIGTERM.
+
+- 2026-10-31 — step 4 checkpointed · 98dc0ce57 — feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5) (1 drift, 5m)
