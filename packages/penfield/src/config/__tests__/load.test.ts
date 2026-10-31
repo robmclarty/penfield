@@ -185,6 +185,23 @@ describe('shape failures', () => {
     expect(issues_of(text)).toEqual([issue]);
   });
 
+  test.each([
+    ['an OpenAI-compatible node', 'cloud: { kind: openai_compatible, url: https://x.test/v1, privacy: cloud, api_key_env: CLAUDE_API_KEY }'],
+    ['an anthropic_api node', 'anthropic: { kind: anthropic_api, api_key_env: CLAUDE_SESSION }'],
+  ])('%s whose api_key_env starts with CLAUDE_ fails at its value (D42)', (_, entry) => {
+    const node = entry.slice(0, entry.indexOf(':'));
+    // The line is indented two spaces, and columns count from 1.
+    const col = entry.indexOf('CLAUDE_') + 3;
+    expect(issues_of(`${MINIMAL}  ${entry}\n`)).toEqual([
+      `penfield.yaml:4:${col} nodes.${node}.api_key_env: a CLAUDE_ variable may hold a Claude subscription credential, which penfield never reads (C2)`,
+    ]);
+  });
+
+  test('an api_key_env with CLAUDE in the middle of its name loads', () => {
+    const entry = '  cloud: { kind: openai_compatible, url: https://x.test/v1, privacy: cloud, api_key_env: MY_CLAUDE_PROXY_KEY }\n';
+    expect(issues_of(`${MINIMAL}${entry}`)).toEqual([]);
+  });
+
   test('every issue is reported, in line order', () => {
     expect(issues_of('version: 1\nnodes:\n  box: { kind: ollama, url: http://x:1, privacy: lan, slot: 2 }\nextra: 1\n')).toEqual([
       'penfield.yaml:3:55 nodes.box.slot: unknown key "slot"',

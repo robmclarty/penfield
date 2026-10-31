@@ -41,7 +41,15 @@ const name = z
     'a name is lowercase letters, digits, ".", "_" or "-", starting with a letter or digit',
   );
 
-const env_name = z.string().regex(/^[A-Z_][A-Z\d_]*$/, 'an environment variable name');
+// D42: a `CLAUDE_` name may hold a subscription credential, which the gateway never
+// reads (C2); the ast-grep rule sees only names written in code, not in the file.
+const env_name = z
+  .string()
+  .regex(/^[A-Z_][A-Z\d_]*$/, 'an environment variable name')
+  .refine(
+    (value) => !value.startsWith('CLAUDE_'),
+    'a CLAUDE_ variable may hold a Claude subscription credential, which penfield never reads (C2)',
+  );
 
 const server = z
   .strictObject({
