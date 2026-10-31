@@ -7,17 +7,21 @@ import type { Breakers, Catalogue, Seen } from './merge.js';
 import type { Discovery } from './types.js';
 
 // The catalogue: the only module that reads a node's models (spec §7). The prober
-// calls `discover_all` each tick and records what it saw, with the breaker states;
-// everything else reads `snapshot()`, plain data merged from those records.
+// reads each node with `discover_node` on its tick and records what it saw, with
+// the breaker states; everything else reads `snapshot()`, plain data merged from
+// those records.
 
 export type Env = Readonly<Record<string, string | undefined>>;
 
-type Discovering = Extract<NodeConfig, { kind: 'ollama' | 'openai_compatible' }>;
+// A node the gateway forwards to, so one it can read.
+type Served = Extract<NodeConfig, { kind: 'ollama' | 'openai_compatible' }>;
 
-const discovers = (entry: NodeConfig): entry is Discovering =>
+const discovers = (entry: NodeConfig): entry is Served =>
   (entry.kind === 'ollama' || entry.kind === 'openai_compatible') && entry.discover;
 
-const discover_node = (name: string, entry: Discovering, env: Env): Promise<Discovery> => {
+// Reads one node's models, whether or not it discovers: the prober also reads a
+// hand-listed OpenAI-compatible node's `/models`, as its liveness.
+export const discover_node = (name: string, entry: Served, env: Env): Promise<Discovery> => {
   const api_key = entry.api_key_env === undefined ? undefined : env[entry.api_key_env];
   if (entry.api_key_env !== undefined && api_key === undefined) {
     return Promise.resolve(down(name, `${entry.api_key_env} is not set`));

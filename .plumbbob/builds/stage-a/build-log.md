@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 5 — feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
+**Current step:** 6 — feat(probe): liveness, readiness, breaker and incidents (spec step 7)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -27,7 +27,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 2. feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3)
 - ☑ 3. feat(cli): serve boots, binds the LAN address and answers /healthz (spec step 4)
 - ☑ 4. feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
-- ☐ 5. feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
+- ☑ 5. feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
 - ☐ 6. feat(probe): liveness, readiness, breaker and incidents (spec step 7)
 - ☐ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
 - ☐ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
@@ -54,6 +54,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [x] system_matches is written with PCRE (?i), which JS RegExp rejects; step 9 must turn a leading (?i) into the i flag, and nothing checks at load that the pattern compiles
 - [x] api_key_env may name any env var, a subscription one included; C2 hardening would refuse CLAUDE_* names in the schema before step 4 reads the key
 - [x] decisions has no column for Decision.policy (max_privacy, prefer, busy), so step 12's 'the row equals the response' cannot hold; step 12's seam lacks log/db.ts to add one
+- [ ] the readiness ping omits keep_alive, so Ollama resets the pinged model's expiry to OLLAMA_KEEP_ALIVE: a model loaded with keep_alive -1 drops to the default; the Q2 spike should compare expires_at in /api/ps before and after a ping
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -187,3 +188,4 @@ folder, so it rides the branch into the PR.)*
   `run_cli` takes argv, env, the output streams and a stop signal as values, so the e2e drives `serve` and `check-config` through the bin's own entry with no build step. That puts `cli.ts` at 91 % coverage instead of the 0 % a spawned binary would give. By hand, the built `dist/cli.js` served `/healthz` on the laptop and exited cleanly on SIGTERM.
 
 - 2026-10-31 — step 4 checkpointed · 98dc0ce57 — feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5) (1 drift, 5m)
+- 2026-10-31 — step 5 checkpointed · 8c4fe77f2 — feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6) (4m)
