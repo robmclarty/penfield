@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 2 — feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3)
+**Current step:** 3 — feat(cli): serve boots, binds the LAN address and answers /healthz (spec step 4)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -24,7 +24,7 @@ line above. Only ONE step is in flight; a step is done only after a checkpoint:
 check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 
 - ☑ 1. feat(config): zod schema, loader and check-config (spec step 2)
-- ☐ 2. feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3)
+- ☑ 2. feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3)
 - ☐ 3. feat(cli): serve boots, binds the LAN address and answers /healthz (spec step 4)
 - ☐ 4. feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
 - ☐ 5. feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
@@ -100,3 +100,4 @@ folder, so it rides the branch into the PR.)*
   The number runs under v8 coverage instrumentation, on a shared CI runner, with no `--expose-gc`; it can flake without the proxy buffering anything. The same step's other assertion, the first chunk reaching the client before the fake has sent the last, is the robust proof of C4. If the heap number flakes, the builder should drop it rather than widen it, and say so at the pause.
 
 - 2026-10-31 — step 1 checkpointed · 72d9b5520 — feat(config): zod schema, loader and check-config (spec step 2) (1 drift, 7m)
+- 2026-10-31 — step 2 checkpointed · 90987f05a — feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3) (1m)
