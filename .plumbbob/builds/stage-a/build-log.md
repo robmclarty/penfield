@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 1 — feat(config): zod schema, loader and check-config (spec step 2)
+**Current step:** 2 — feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -23,7 +23,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 line above. Only ONE step is in flight; a step is done only after a checkpoint:
 check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 
-- ☐ 1. feat(config): zod schema, loader and check-config (spec step 2)
+- ☑ 1. feat(config): zod schema, loader and check-config (spec step 2)
 - ☐ 2. feat(log): open penfield.db with its tables, WAL and a boot id (spec step 3)
 - ☐ 3. feat(cli): serve boots, binds the LAN address and answers /healthz (spec step 4)
 - ☐ 4. feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
@@ -53,6 +53,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [ ] a router rule naming a profile no profiles: entry defines (the spec's stt rule) is not a D41 load check; step 9 decides: refuse at load, or a refused route
 - [ ] system_matches is written with PCRE (?i), which JS RegExp rejects; step 9 must turn a leading (?i) into the i flag, and nothing checks at load that the pattern compiles
 - [ ] api_key_env may name any env var, a subscription one included; C2 hardening would refuse CLAUDE_* names in the schema before step 4 reads the key
+- [ ] decisions has no column for Decision.policy (max_privacy, prefer, busy), so step 12's 'the row equals the response' cannot hold; step 12's seam lacks log/db.ts to add one
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -97,3 +98,5 @@ folder, so it rides the branch into the PR.)*
   **3.** Plan step 13's "heap growth under 32 MB" is the one done-when a check may not measure reliably
 
   The number runs under v8 coverage instrumentation, on a shared CI runner, with no `--expose-gc`; it can flake without the proxy buffering anything. The same step's other assertion, the first chunk reaching the client before the fake has sent the last, is the robust proof of C4. If the heap number flakes, the builder should drop it rather than widen it, and say so at the pause.
+
+- 2026-10-31 — step 1 checkpointed · 72d9b5520 — feat(config): zod schema, loader and check-config (spec step 2) (1 drift, 7m)
