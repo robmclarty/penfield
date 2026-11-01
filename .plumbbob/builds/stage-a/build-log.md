@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 8 — feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
+**Current step:** 9 — feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -30,7 +30,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 5. feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
 - ☑ 6. feat(probe): liveness, readiness, breaker and incidents (spec step 7)
 - ☑ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
-- ☐ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
+- ☑ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
 - ☐ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
 - ☐ 10. feat(place): leases and placement (spec step 11)
 - ☐ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
@@ -63,6 +63,8 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [ ] a model whose readiness ping answers 4xx keeps the breaker it had (D45 counts it as nothing), so a model breaker opened by an earlier hang or 5xx stays open while every half-open ping answers 400; a 4xx in half-open might count as a success
 - [ ] the spec's §5.1 example and playbook §4's house config still name qwen3:4b-instruct-2507; step 19's playbook pass should carry searle's real tag qwen3:4b-instruct-2507-q4_K_M, and config/defaults.ts still says ready_prompt is off until Q2 is measured
 - [ ] OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form
+- [ ] the house file has no vision rule or profile, so an image routes to chat's first candidate, qwen3.6:35b-mlx, whether or not it reads images; a rule on attachments: images and a vision-capable candidate list would keep a picture off a text-only model
+- [ ] a system_matches pattern that does not compile is caught only when a request reaches its rule (refused then); compiling each pattern at load, (?i) included, would make it a D41 static check with a line
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -301,3 +303,4 @@ folder, so it rides the branch into the PR.)*
   A missing or malformed tokens file, or a line naming a caller `penfield.yaml` lacks, stops `serve` before it opens the state dir, with the line. An empty file boots, and the banner says every request but `/healthz` is refused. The auth hook is fail-closed: only `/healthz` is public, so an unknown path without a token is a 401, not a 404. In `/v1/models` a tag is listed bare (what a client sends for D6 (explicit-wins)), a decision node's model as `claude/<model>`, and a tag two nodes share as `node/tag` on both.
 
 - 2026-11-01 — step 20 checkpointed · 65884f1f5 — fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run) (1 drift, 3m)
+- 2026-11-01 — step 8 checkpointed · 1830c5c44 — feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9) (5m)

@@ -40,3 +40,31 @@ export type RouteInput = {
 
 // A body the router cannot read is refused with the reason, for the wire's 400.
 export type InputResult = { ok: true; input: RouteInput } | { ok: false; reason: string };
+
+// ── the ladder ────────────────────────────────────────────────────────────────
+
+// D7's rungs, cheapest first. Stage A ships all but `embedding` and `classifier`.
+export type Rung = 'explicit' | 'alias' | 'shape' | 'rule' | 'embedding' | 'classifier' | 'default';
+
+// What a rung says: a profile and how sure it is, a refusal, or nothing. Each
+// carries the line it adds to the Decision's reasons; a pass may add none.
+export type Answer = { kind: 'answer'; profile: string; confidence: number; reason: string };
+
+export type RungResult = Answer | { kind: 'refused'; reason: string } | { kind: 'pass'; reason: string | null };
+
+// The embedding and classifier rungs call a model, so the ladder takes them as
+// functions and Stage A passes none (C3).
+export type ModelRung = (input: RouteInput) => Promise<RungResult>;
+
+export type ModelRungs = { embedding?: ModelRung; classifier?: ModelRung };
+
+// What an alias asks of placement beside its profile (D10).
+export type AliasPolicy = { prefer?: Prefer; max_privacy?: Privacy };
+
+// What the ladder hands placement: a profile to place, the one model the request
+// named (D6), or a refusal with its reason.
+export type RoutedProfile = AliasPolicy & { rung: Rung; confidence: number; reasons: string[] } & (
+    | { kind: 'profile'; profile: string }
+    | { kind: 'model'; model: string }
+    | { kind: 'refused'; reason: string }
+  );
