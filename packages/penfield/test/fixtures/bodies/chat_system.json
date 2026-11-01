@@ -1,0 +1,8 @@
+{
+  "model": "auto",
+  "messages": [
+    { "role": "system", "content": "Classify the support ticket into one of: billing, bug, feature." },
+    { "role": "developer", "content": "Answer with the label alone." },
+    { "role": "user", "content": "I was charged twice this month." }
+  ]
+}

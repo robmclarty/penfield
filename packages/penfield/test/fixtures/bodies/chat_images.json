@@ -1,0 +1,12 @@
+{
+  "model": "auto",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What is on this whiteboard?" },
+        { "type": "image_url", "image_url": { "url": "data:image/png;base64,iVBORw0KGgo=" } }
+      ]
+    }
+  ]
+}

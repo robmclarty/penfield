@@ -1,0 +1,57 @@
+{
+  "model": "chat",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Question 1?"
+    },
+    {
+      "role": "assistant",
+      "content": "Answer 1."
+    },
+    {
+      "role": "user",
+      "content": "Question 2?"
+    },
+    {
+      "role": "assistant",
+      "content": "Answer 2."
+    },
+    {
+      "role": "user",
+      "content": "Question 3?"
+    },
+    {
+      "role": "assistant",
+      "content": "Answer 3."
+    },
+    {
+      "role": "user",
+      "content": "Question 4?"
+    },
+    {
+      "role": "assistant",
+      "content": "Answer 4."
+    },
+    {
+      "role": "user",
+      "content": "Question 5?"
+    },
+    {
+      "role": "assistant",
+      "content": "Answer 5."
+    },
+    {
+      "role": "user",
+      "content": "Question 6?"
+    },
+    {
+      "role": "assistant",
+      "content": "Answer 6."
+    },
+    {
+      "role": "user",
+      "content": "And the last one?"
+    }
+  ]
+}

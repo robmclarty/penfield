@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 20 — fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
+**Current step:** 8 — feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -42,7 +42,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☐ 17. feat(deploy): Dockerfile, compose, systemd unit and the office config (spec step 18)
 - ☐ 18. feat(cli): replay re-runs the ladder over logged decisions, decisions lists them (spec step 19)
 - ☐ 19. docs: README, decisions.md and the playbook as shipped (spec step 20)
-- ☐ 20. fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
+- ☑ 20. fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
 
 ## Park list
 
@@ -62,6 +62,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [x] the house file's classify and extract candidate qwen3:4b-instruct-2507 matches no tag on searle, which has qwen3:4b-instruct-2507-q4_K_M, so the gateway logs candidate_missing for both at every boot; rename it in deploy/penfield.example.yaml
 - [ ] a model whose readiness ping answers 4xx keeps the breaker it had (D45 counts it as nothing), so a model breaker opened by an earlier hang or 5xx stays open while every half-open ping answers 400; a 4xx in half-open might count as a success
 - [ ] the spec's §5.1 example and playbook §4's house config still name qwen3:4b-instruct-2507; step 19's playbook pass should carry searle's real tag qwen3:4b-instruct-2507-q4_K_M, and config/defaults.ts still says ready_prompt is off until Q2 is measured
+- [ ] OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -298,3 +299,5 @@ folder, so it rides the branch into the PR.)*
   **5.** Callers are refused before anything opens, and `/v1/models` names models as a client sends them
 
   A missing or malformed tokens file, or a line naming a caller `penfield.yaml` lacks, stops `serve` before it opens the state dir, with the line. An empty file boots, and the banner says every request but `/healthz` is refused. The auth hook is fail-closed: only `/healthz` is public, so an unknown path without a token is a 401, not a 404. In `/v1/models` a tag is listed bare (what a client sends for D6 (explicit-wins)), a decision node's model as `claude/<model>`, and a tag two nodes share as `node/tag` on both.
+
+- 2026-11-01 — step 20 checkpointed · 65884f1f5 — fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run) (1 drift, 3m)

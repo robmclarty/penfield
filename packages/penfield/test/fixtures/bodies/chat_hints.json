@@ -1,0 +1,5 @@
+{
+  "model": "auto",
+  "metadata": { "penfield": { "profile": "code-heavy", "effort": "high" }, "trace": "flow-7" },
+  "messages": [{ "role": "user", "content": "Plan the refactor of the lease table." }]
+}
