@@ -5,7 +5,7 @@ import type { Db, Row } from './db.js';
 // `log.decision`: one append-only row per Decision in `decisions` (spec §5.5, D31,
 // D43), in the gateway's own schema (D23), and the read that gives it back. A row
 // read back is the Decision as it was sent, beside the outcome columns the proxy
-// fills in once it runs one (plan step 13): a dry decision has none of them.
+// fills in once it runs one (`log_outcome`): a dry decision has none of them.
 
 // The Decision as the log keeps it. Placement's `Decision` fits it; the log names
 // its own shape so it never imports what it records.
@@ -91,6 +91,29 @@ export const log_decision = (db: Db, decision: LoggedDecision, input: LoggedInpu
     input: JSON.stringify(rest),
     policy: JSON.stringify(decision.policy),
   });
+};
+
+// ── the outcome ───────────────────────────────────────────────────────────────
+
+// `log.outcome`: what the proxy writes on a decision's row once its forward ends.
+// Timings are from the forward's dispatch; `bytes_out` is what the client got.
+export type LoggedOutcome = {
+  outcome: string;
+  first_byte_ms: number | null;
+  total_ms: number;
+  bytes_out: number;
+  upstream_status: number | null;
+  upstream_prompt_tokens: number | null;
+};
+
+// Written once: a row that already has an outcome keeps it.
+const OUTCOME = `update decisions set
+  outcome = :outcome, first_byte_ms = :first_byte_ms, total_ms = :total_ms,
+  bytes_out = :bytes_out, upstream_status = :upstream_status, upstream_prompt_tokens = :upstream_prompt_tokens
+where id = :id and outcome is null`;
+
+export const log_outcome = (db: Db, id: string, outcome: LoggedOutcome): void => {
+  db.run(OUTCOME, { id, ...outcome });
 };
 
 // ── reading it back ───────────────────────────────────────────────────────────

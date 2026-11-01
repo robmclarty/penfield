@@ -56,6 +56,8 @@ export type Leases = {
   wait: (claim: Claim, wait_ms: number, signal?: AbortSignal) => Promise<Waited>;
   // True the first time; a lease already released stays as it ended.
   release: (id: string, outcome: Outcome) => boolean;
+  // Stamps an active lease's `last_byte_at` now: the proxy's, as bytes pass.
+  touch: (id: string) => void;
   in_use: () => InUse;
   active: () => Lease[];
 };
@@ -75,6 +77,8 @@ select :id, :request_id, :decision_id, :caller, :node, :model, :instance, :start
 where (select count(*) from leases where node = :node and model = :model and state = 'active') < :slots`;
 
 const RELEASE = `update leases set state = :state where id = :id and state = 'active'`;
+
+const TOUCH = `update leases set last_byte_at = :at where id = :id and state = 'active'`;
 
 const SELECT = `select id, request_id, decision_id, caller, node, model, instance,
   started_at, last_byte_at, deadline_at, state from leases`;
@@ -198,6 +202,9 @@ export const create_leases = ({ db, clock }: { db: Db; clock: Clock }): Leases =
     acquire: (claim) => (lines.has(ref_of(claim)) ? null : acquire(claim)),
     wait,
     release,
+    touch: (id) => {
+      db.run(TOUCH, { id, at: iso(clock.now()) });
+    },
     in_use: () =>
       Object.fromEntries(
         db

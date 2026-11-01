@@ -18,6 +18,10 @@ const KINDS = {
   forbidden: { status: 403, type: 'permission_error', code: 'forbidden' },
   not_found: { status: 404, type: 'invalid_request_error', code: 'not_found' },
   internal: { status: 500, type: 'server_error', code: 'internal_error' },
+  // The node failed the forward: it refused the connection, or broke it.
+  bad_gateway: { status: 502, type: 'server_error', code: 'upstream_error' },
+  // The node went quiet past `stall_ms`, or the forward ran out its `deadline_ms`.
+  gateway_timeout: { status: 504, type: 'server_error', code: 'upstream_timeout' },
 } satisfies Record<string, Kind>;
 
 type ErrorKind = keyof typeof KINDS;
@@ -31,6 +35,9 @@ type Ids = { request_id: string; decision_id?: string };
 const body_of = ({ type, code }: Kind, message: string, { request_id, decision_id }: Ids): ErrorBody => ({
   error: { message, type, param: null, code, request_id, ...(decision_id === undefined ? {} : { decision_id }) },
 });
+
+// The envelope alone, for an error that goes out inside a stream already under way.
+export const error_body = (kind: ErrorKind, message: string, ids: Ids): ErrorBody => body_of(KINDS[kind], message, ids);
 
 const send = (reply: FastifyReply, kind: Kind, message: string, decision_id?: string): FastifyReply => {
   const request_id = reply.request.id;

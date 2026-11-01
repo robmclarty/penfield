@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 22 — fix(place): under `avoid`, a cold local load outranks a Claude decision ranked below it (range 5's P21)
+**Current step:** 13 — feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -44,7 +44,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☐ 19. docs: README, decisions.md and the playbook as shipped (spec step 20)
 - ☑ 20. fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
 - ☑ 21. fix(place): a cold load never asks Ollama to evict beside a resident pin (range 4's P16)
-- ☐ 22. fix(place): under `avoid`, a cold local load outranks a Claude decision ranked below it (range 5's P21)
+- ☑ 22. fix(place): under `avoid`, a cold local load outranks a Claude decision ranked below it (range 5's P21)
 
 ## Park list
 
@@ -73,6 +73,10 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [x] with max_loaded 2 and both the pinned 27B and the 35B resident on searle, D46 refuses every cold load there, an embedding model included, so /v1/embeddings with auto fails until one unloads; OLLAMA_MAX_LOADED_MODELS 3 on searle, or an embedding model kept resident, would leave room
 - [x] prober.test.ts runs its hang cases at timeout_ms 300, which also times liveness and discovery against the local fake, so under a loaded gate (28 s against 6) /api/version or /api/tags can miss 300 ms, searle reads down, and 'a hung resident model ... is unloaded once' sees no generate at all; a fake-clock readiness timeout, or a longer liveness budget than the hang's, would keep it off the gate
 - [x] under cold_load avoid a Claude decision counts as ready and ranks ahead of a cold local load, and penfield never loads a pin, so on an idle searle (/api/ps empty at range 5's live stop) every auto chat from a cloud caller goes to claude/sonnet, and nothing penfield does for rob or zed-native ever loads a chat model there; a cold local candidate could give way only to a ready local one ranked below it, never to a decision
+- [ ] spec §6 says three stalls in five minutes open the node's breaker; the proxy writes each stall incident, but nothing counts them into the prober's breaker, so a node that stalls every request stays placeable
+- [ ] the proxy sends no node key: an openai_compatible node with api_key_env (openrouter) would answer 401; plan step 14 or Stage D should pass the key the catalogue resolves from env, as discovery does
+- [ ] upstream_prompt_tokens is read only from an event stream's last usage chunk; a stream: false chat and every /v1/embeddings answer carry usage in their JSON body and log null, which thins Q4's sample
+- [ ] the forwarded body is the parsed body re-serialized with model swapped, so a number's spelling can change (1.0 goes up as 1, an integer past 2^53 loses digits); rewriting model in the raw bytes would hold C1 to the byte
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -539,3 +543,58 @@ folder, so it rides the branch into the PR.)*
   **5.** `/route` returns 200 for every decision except the policy's 403, refusals included
 
   A body the router cannot read gets a 400 and leaves no row. A caller naming a model it may not use gets a 403 with the reason and the decision id, and the row is logged with outcome `refused`. An unknown model, a busy node, or no candidate at all returns 200 with a refused target, because the Decision is the answer `/route` exists to give. Chat completions in step 14 will need their own mapping (a 404 `model_not_found` for an unknown model, a 503 when busy). The envelope puts `request_id` and `decision_id` inside `error`, and the 403 uses the type `permission_error`. A dry row's outcome is null. `/decisions` shows every caller's rows to whoever asks, like `/catalogue`, and never returns prompt text.
+
+- 2026-11-01 — step 22 checkpointed · d7c86b944 — fix(place): under `avoid`, a cold local load outranks a Claude decision ranked below it (range 5's P21) (5m)
+- 2026-11-01 — range 9 of 9's stop recorded — with nothing resident on searle, `POST /route` with a short `auto` question decides a cold load of `qwen3.6:35b-mlx`, not Claude; then load it and ask again for the resident candidate range 5's stop could not show
+
+  **Summary**: Range 9 fixes the rule that sent every `auto` chat to Claude when searle had nothing loaded (P21). Under `cold_load: avoid`, only a local model that is already up may now jump ahead of a cold load, and a Claude decision keeps its place in the profile's order. So with nothing resident, rob's `auto` chat cold-loads `qwen3.6:35b-mlx`, with the 27B and `claude/sonnet@low` as its alternatives. Step 22 changed one function in `placement.ts`. Its tests run over the house file's own profiles, and the route e2e now boots a second gateway over an idle fake searle. It landed green on the first run, inside its seam.
+
+  1. With nothing resident, `auto` chat now cold-loads the 35B where it used to decide Claude
+  2. A busy resident model now degrades to a cold load ranked next, not to Claude
+  3. A decision ranked between a cold load and a ready local model ends up behind both
+  4. The route e2e boots a second gateway over an idle searle, because the probe runs every 10 s
+
+  **Readout**:
+
+  ```text
+  steps        1 of 1 landed
+               - 22 d7c86b9
+  check        green: 9 of 9 checks, 1 landing
+  done-when    met
+  decisions    honored:
+               - D48 (avoid-yields-to-local)
+               - D44 (memory-fit-cold-load), D46 (ollama-picks-the-evictee)
+  constraints  17 of 17 honored
+  seam         held: 1 of 1 steps, no strays
+  diff         +167 -22 across 3 files
+               - packages/penfield/src/place/__tests__/placement.test.ts +102 -1
+               - packages/penfield/src/place/placement.ts +9 -4
+               - packages/penfield/test/e2e/route.test.ts +56 -17
+  spent        5 min · green first run at every landing
+  ```
+
+  **Verdict**: ● Plumb
+
+  **Recommendation**: Run the stop live from the laptop. Restart your gateway on this commit, make sure `/api/ps` on searle is empty, ask `/route`, then load the 35B, wait one probe (10 s) and ask again. The first ask should name `searle/qwen3.6:35b-mlx` with `placement.cold_load: true` and sonnet among its alternatives. The second should name the same model, resident. If the pinned 27B is loaded, the first ask takes the 27B instead, so unload it first. Then decide whether section 2's busy fallback is the trade you want before range 6 sends real traffic. If it is not, it needs a new decision, not a change to this step. With `$H` and `$T` as in the playbook:
+
+  ```sh
+  curl -s http://192.168.1.90:11434/api/ps | jq '.models[].name'
+  curl -s -H "Authorization: Bearer $T" -H 'content-type: application/json' $H/route -d '{"model":"auto","messages":[{"role":"user","content":"what is the capital of France?"}]}' | jq '{target, alternatives, placement}'
+  curl -s http://192.168.1.90:11434/api/generate -d '{"model":"qwen3.6:35b-mlx","keep_alive":"30m"}'
+  ```
+
+  **1.** With nothing resident, `auto` chat now cold-loads the 35B where it used to decide Claude
+
+  The old pool under `avoid` put every ready candidate ahead of every cold load, and it counted a Claude decision as ready. The new pool finds the first cold load in rank order. Everything ranked above it stays where it is. From there down, the ready local models go first, in rank order, then the cold loads and the decisions, in rank order. Over the house file that gives: idle chat takes the 35B cold; chat with the 35B resident takes it; code-light with the 35B resident takes it over the cold 27B ranked above it; summarize with only the pinned 27B resident takes the 27B; code-heavy still decides `claude/opus@high` first. A cold load that D44 or D46 refuses drops out of the pool as before, and the next in rank takes the request: the cold 27B when only the 35B is too big, `claude/sonnet@low` when neither fits, and sonnet again when the pinned 27B is busy and the 35B cannot load beside it. `allow` and `never` build the same pool as before. The resident case in the route e2e now lists its alternatives in rank order, 27B before sonnet.
+
+  **2.** A busy resident model now degrades to a cold load ranked next, not to Claude
+
+  This follows from D48 but the done-when does not name it. Take rob's chat with the 35B resident and both of its slots held. Before, `degrade` fell through to `claude/sonnet@low`, since the decision ranked ahead of the cold 27B. Now the cold 27B comes first. With the 27B not loaded, D44 lets it in beside the leased 35B (20 GB beside 25 in 48, two of `max_loaded` 2), so a third concurrent chat cold-loads the slow 27B. That costs a first token under `stall_ms.first_token_cold` (90 s) instead of a Claude answer. For `zed-native` it means a cold-load wait instead of a hint message. `wait` callers such as night-shift are unchanged: they wait for the first candidate.
+
+  **3.** A decision ranked between a cold load and a ready local model ends up behind both
+
+  D48 holds two rules: a cold load gives way to a ready local model ranked below it, and a decision never jumps a cold load ranked above it. With the order cold A, decision D, ready B, the only order that keeps both is B, A, D. So the ready model goes first, and the decision drops behind B even though the profile ranked it above B. No house profile has this shape today. One test pins it, with summarize rewritten as gemma cold, then sonnet, then the resident 35B: the 35B is chosen, then gemma, then sonnet.
+
+  **4.** The route e2e boots a second gateway over an idle searle, because the probe runs every 10 s
+
+  The house file probes searle every 10 s on a real clock. Changing the fake's residency mid-run would need a 10 s wait. Instead, the e2e's boot and shutdown became two helpers, and a second describe block boots its own gateway over a fake with nothing resident. It decides the 35B cold load and checks that the fake still has nothing loaded, since a dry decision loads nothing. The first gateway's tests are unchanged apart from the alternatives' order.

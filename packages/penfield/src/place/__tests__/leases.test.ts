@@ -115,6 +115,21 @@ describe('release', () => {
       'released',
     ]);
   });
+
+  test('touch stamps an active lease with the last byte, and leaves an ended one as it ended', () => {
+    const db = open();
+    const leases = create_leases({ db, clock });
+    const lease = held(leases, claim_for());
+    clock.advance(1_500);
+    leases.touch(lease.id);
+    expect(leases.active()[0]).toMatchObject({ id: lease.id, last_byte_at: '2026-10-31T12:00:01.500Z' });
+    leases.release(lease.id, 'ok');
+    clock.advance(1_000);
+    leases.touch(lease.id);
+    expect(db.get('select last_byte_at from leases where id = :id', { id: lease.id })).toEqual({
+      last_byte_at: '2026-10-31T12:00:01.500Z',
+    });
+  });
 });
 
 describe('wait: one FIFO per node and model', () => {
@@ -211,22 +226,24 @@ describe('orphans', () => {
     expect(sweep_orphans(deps)).toBe(0);
   });
 
-  test('the reaper releases a lease past its deadline_at on its tick, and the slot goes to the line', async () => {
+  test('the reaper leaves a lease at its deadline_at to the proxy and takes it 30 s past, the slot going to the line (D47)', async () => {
     const db = open();
     const leases = create_leases({ db, clock });
-    const reaper = create_reaper({ ...reaping(db, leases), every_ms: 10_000 });
+    // Ticks every 5 s: on the deadline at 15 s, and on 30 s past it at 45 s.
+    const reaper = create_reaper({ ...reaping(db, leases), every_ms: 5_000 });
     const hung = held(leases, claim_for({ slots: 1, deadline_ms: 15_000 }));
-    const waiting = leases.wait(claim_for({ slots: 1 }), 60_000);
+    const waiting = leases.wait(claim_for({ slots: 1 }), 120_000);
     reaper.start();
-    clock.advance(10_000);
+    clock.advance(45_000);
     expect(leases.active().map(({ id }) => id)).toEqual([hung.id]);
-    clock.advance(10_000);
-    expect(await waiting).toMatchObject({ ok: true, waited_ms: 20_000 });
+    expect(incidents(db)).toEqual([]);
+    clock.advance(5_000);
+    expect(await waiting).toMatchObject({ ok: true, waited_ms: 50_000 });
     expect(db.get('select state from leases where id = :id', { id: hung.id })).toEqual({ state: 'orphaned' });
     expect(db.all('select kind, detail from incidents')).toEqual([
       {
         kind: 'orphaned',
-        detail: `lease ${hung.id} for rob (request ${hung.request_id}) was still active past its deadline_at 2026-10-31T12:00:15.000Z; released`,
+        detail: `lease ${hung.id} for rob (request ${hung.request_id}) was still active 30 s past its deadline_at 2026-10-31T12:00:15.000Z; released`,
       },
     ]);
     expect(reaper.tick()).toBe(0);
