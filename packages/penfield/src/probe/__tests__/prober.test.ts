@@ -91,6 +91,8 @@ const incidents = (): string[] =>
 const generates = (fake: FakeServer): unknown[] =>
   fake.requests.filter(({ url }) => url === '/api/generate').map(({ body }): unknown => JSON.parse(body));
 
+const ready_ping = (model: string) => ({ model, prompt: '', stream: false });
+
 const searle_node = (catalogue: Catalogue) => catalogue.nodes.find(({ name }) => name === 'searle');
 
 describe('the node breaker', () => {
@@ -246,6 +248,44 @@ describe('readiness (Q2)', () => {
       [GEMMA, 'closed'],
       [NOMIC, 'closed'],
     ]);
+  });
+
+  test('an embedding model answering 400 is never unloaded, counts toward no breaker and writes no incident (D45)', async () => {
+    const { ollama, clock, catalogue, prober } = await searle(
+      { resident: [QWEN, NOMIC], embedding: [NOMIC] },
+      { ready: true, unload: true },
+    );
+    for (let tick = 0; tick < 4; tick += 1) {
+      await prober.tick();
+      clock.advance(EVERY_MS * 6);
+    }
+    expect(generates(ollama)).toEqual(Array.from({ length: 4 }, () => [ready_ping(QWEN), ready_ping(NOMIC)]).flat());
+    expect(ollama.state.resident).toEqual([QWEN, NOMIC]);
+    expect(incidents()).toEqual([]);
+    expect(catalogue.snapshot().models.map(({ id, breaker }) => [id, breaker])).toEqual([
+      [QWEN, 'closed'],
+      [GEMMA, 'closed'],
+      [NOMIC, 'closed'],
+    ]);
+  });
+
+  test("a 5xx counts toward the model's breaker, and is not unloaded even under unload_on_hang (D45)", async () => {
+    const { ollama, clock, catalogue, prober } = await searle({ crashed: [QWEN] }, { ready: true, unload: true });
+    await prober.tick();
+    for (let tick = 1; tick < 3; tick += 1) {
+      clock.advance(EVERY_MS * 6);
+      await prober.tick();
+    }
+    const reason = `readiness: POST ${ollama.url}/api/generate: HTTP 500`;
+    expect(incidents()).toEqual([
+      `probe_fail ${QWEN}: 1 of 3: ${reason}`,
+      `probe_fail ${QWEN}: 2 of 3: ${reason}`,
+      `breaker_open ${QWEN}: 3 failed in a row; last: ${reason}`,
+    ]);
+    expect(generates(ollama)).not.toContainEqual({ model: QWEN, keep_alive: 0 });
+    expect(ollama.state.resident).toEqual([QWEN]);
+    expect(searle_node(catalogue.snapshot())).toMatchObject({ state: 'up', breaker: 'closed' });
+    expect(catalogue.snapshot().models[0]?.breaker).toBe('open');
   });
 
   test("without unload_on_hang, readiness failures count toward the model's breaker and nothing is unloaded", async () => {

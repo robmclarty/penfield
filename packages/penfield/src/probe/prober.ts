@@ -101,7 +101,11 @@ export const create_prober = (deps: ProberDeps): Prober => {
     const admitted = admit(model_breakers.get(ref) ?? CLOSED, clock.now(), entry.probe.half_open_ms);
     if (admitted === undefined) return;
     const ping = await ping_ready(entry.url, id, entry.probe.timeout_ms, clock.now);
-    if (ping.ok || !entry.recover.unload_on_hang) {
+    // D45: a 4xx is the runner answering (an embedding model refuses `generate`), so
+    // it counts as nothing; only a hang takes `unload_on_hang`, and a 5xx or a
+    // refused connection counts toward the model's breaker.
+    if (!ping.ok && ping.failure === 'client') return;
+    if (ping.ok || ping.failure !== 'hang' || !entry.recover.unload_on_hang) {
       const step = ping.ok ? succeed(admitted) : fail(admitted, clock.now(), entry.probe.open_after);
       model_breakers.set(ref, step.breaker);
       transition(name, id, step, ping.ok ? null : `readiness: ${ping.reason}`, entry.probe.open_after);

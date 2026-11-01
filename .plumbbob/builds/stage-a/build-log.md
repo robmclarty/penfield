@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 7 — feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
+**Current step:** 20 — fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -29,7 +29,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 4. feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5)
 - ☑ 5. feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6)
 - ☑ 6. feat(probe): liveness, readiness, breaker and incidents (spec step 7)
-- ☐ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
+- ☑ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
 - ☐ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
 - ☐ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
 - ☐ 10. feat(place): leases and placement (spec step 11)
@@ -42,6 +42,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☐ 17. feat(deploy): Dockerfile, compose, systemd unit and the office config (spec step 18)
 - ☐ 18. feat(cli): replay re-runs the ladder over logged decisions, decisions lists them (spec step 19)
 - ☐ 19. docs: README, decisions.md and the playbook as shipped (spec step 20)
+- ☐ 20. fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
 
 ## Park list
 
@@ -54,7 +55,13 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [x] system_matches is written with PCRE (?i), which JS RegExp rejects; step 9 must turn a leading (?i) into the i flag, and nothing checks at load that the pattern compiles
 - [x] api_key_env may name any env var, a subscription one included; C2 hardening would refuse CLAUDE_* names in the schema before step 4 reads the key
 - [x] decisions has no column for Decision.policy (max_privacy, prefer, busy), so step 12's 'the row equals the response' cannot hold; step 12's seam lacks log/db.ts to add one
-- [ ] the readiness ping omits keep_alive, so Ollama resets the pinged model's expiry to OLLAMA_KEEP_ALIVE: a model loaded with keep_alive -1 drops to the default; the Q2 spike should compare expires_at in /api/ps before and after a ping
+- [x] the readiness ping omits keep_alive, so Ollama resets the pinged model's expiry to OLLAMA_KEEP_ALIVE: a model loaded with keep_alive -1 drops to the default; the Q2 spike should compare expires_at in /api/ps before and after a ping
+- [x] llama-swap on searle for one big model at a time and backends Ollama lacks (llama.cpp flags, mlx_lm, vLLM): it is an openai_compatible node today with residency unknown; a discoverer reading its running-model endpoint would keep pins and cold_load honest (Stage E, more nodes)
+- [x] step 10's cold_load check should be memory-aware: a cold load goes ahead only when the model fits in the node's memory_gb beside its pinned and leased resident models (weights from discovery's size_bytes plus a KV allowance), else degrade or wait by the busy policy
+- [x] the readiness ping sends /api/generate to every resident model, and an embedding model answers 400 'does not support generate', which the prober treats as a hang: unload_on_hang unloaded nomic-embed-text on searle and opened its breaker; readiness should count only a timeout as not ready, and ping an embedding model through /api/embed or not at all
+- [x] the house file's classify and extract candidate qwen3:4b-instruct-2507 matches no tag on searle, which has qwen3:4b-instruct-2507-q4_K_M, so the gateway logs candidate_missing for both at every boot; rename it in deploy/penfield.example.yaml
+- [ ] a model whose readiness ping answers 4xx keeps the breaker it had (D45 counts it as nothing), so a model breaker opened by an earlier hang or 5xx stays open while every half-open ping answers 400; a 4xx in half-open might count as a success
+- [ ] the spec's §5.1 example and playbook §4's house config still name qwen3:4b-instruct-2507; step 19's playbook pass should carry searle's real tag qwen3:4b-instruct-2507-q4_K_M, and config/defaults.ts still says ready_prompt is off until Q2 is measured
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -78,6 +85,12 @@ Harvest results this boundary:
 - **tangent**: park 3 · system_matches is written with PCRE (?i), which JS RegExp rejects; step 9 must turn a leading (?i) into the i flag, and nothing checks at load that the pattern compiles → step 9's twenty-request table hits it on the classify row, and `route/rungs/rule.ts` can turn a leading `(?i)` into the `i` flag
 - **blocker**: park 4 · api_key_env may name any env var, a subscription one included; C2 hardening would refuse CLAUDE_* names in the schema before step 4 reads the key → C2 (no-subscription-credential) is held only by the ast-grep rule on names in code, and the file can point step 4 at any env var
 - **blocker**: park 5 · decisions has no column for Decision.policy (max_privacy, prefer, busy), so step 12's 'the row equals the response' cannot hold; step 12's seam lacks log/db.ts to add one → step 12's done-when says the row equals the response, and `Decision.policy` has no column to hold it
+- 2026-11-01, at range 2 of 8's stop: 5 parked ideas, classified.
+- **tangent**: park 6 · the readiness ping omits keep_alive, so Ollama resets the pinged model's expiry to OLLAMA_KEEP_ALIVE: a model loaded with keep_alive -1 drops to the default; the Q2 spike should compare expires_at in /api/ps before and after a ping → the spike showed a ping leaves a `keep_alive: -1` expiry untouched on Ollama 0.34.2, so there is nothing to fix
+- **tangent**: park 7 · llama-swap on searle for one big model at a time and backends Ollama lacks (llama.cpp flags, mlx_lm, vLLM): it is an openai_compatible node today with residency unknown; a discoverer reading its running-model endpoint would keep pins and cold_load honest (Stage E, more nodes) → Ollama's own scheduler covers one big model at a time for now, and a llama-swap node is Stage E's more-nodes work
+- **blocker**: park 8 · step 10's cold_load check should be memory-aware: a cold load goes ahead only when the model fits in the node's memory_gb beside its pinned and leased resident models (weights from discovery's size_bytes plus a KV allowance), else degrade or wait by the busy policy → step 10's done-when refuses a cold load that would evict a pinned model, and only a fit against `memory_gb` can tell when one would
+- **blocker**: park 9 · the readiness ping sends /api/generate to every resident model, and an embedding model answers 400 'does not support generate', which the prober treats as a hang: unload_on_hang unloaded nomic-embed-text on searle and opened its breaker; readiness should count only a timeout as not ready, and ping an embedding model through /api/embed or not at all → with `ready_prompt` on, the gateway unloads searle's embedding model whenever a readiness tick finds it resident, so it becomes a fix step at the head of range 3
+- **blocker**: park 10 · the house file's classify and extract candidate qwen3:4b-instruct-2507 matches no tag on searle, which has qwen3:4b-instruct-2507-q4_K_M, so the gateway logs candidate_missing for both at every boot; rename it in deploy/penfield.example.yaml → a one-line rename in the house file, riding P9's fix step
 
 ## Log
 
@@ -190,3 +203,98 @@ folder, so it rides the branch into the PR.)*
 - 2026-10-31 — step 4 checkpointed · 98dc0ce57 — feat(catalogue): discover Ollama and OpenAI-compatible nodes (spec step 5) (1 drift, 5m)
 - 2026-10-31 — step 5 checkpointed · 8c4fe77f2 — feat(catalogue): merge overlays, pins and slots into snapshot (spec step 6) (4m)
 - 2026-10-31 — step 6 checkpointed · ed7d7697a — feat(probe): liveness, readiness, breaker and incidents (spec step 7) (1 drift, 7m)
+- 2026-10-31 — step 7 checkpointed · 86d63084c — feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8) (1 drift, 5m)
+- 2026-11-01 — range 2 of 8's stop recorded — run the catalogue against searle with D29's laptop command and compare `/v1/models` and `/catalogue` with `ollama ps`; decide Q1 (set `OLLAMA_CONTEXT_LENGTH` on searle and record `context` in the overlay, or not); spike Q2 by timing the readiness ping on the resident MLX models and confirming nothing loaded that was not already resident
+
+  **Summary**: The gateway now knows what searle has and what is loaded. Discovery reads `/api/tags` and `/api/ps` (or `/models` on an OpenAI-compatible node) and never throws: a node it cannot read is `down` with the reason. The catalogue merges the overlay, pins, slots and breakers into a plain-data snapshot and warns about any profile candidate no node has. The prober runs liveness, discovery and the readiness ping on each node's own interval, with a breaker per node and per model, and writes every transition to the `incidents` table. `penfield serve` reads the tokens file, refuses any request without a known caller except `/healthz`, and answers `/v1/models` and `/catalogue` by each caller's policy. All of it is proven against the fake Ollama and fake OpenAI servers. The live comparison with searle is yours, at this stop.
+
+  1. Steps 4, 6 and 7 landed a hair off, for shared code and the `serve` wiring the live stop needs
+  2. A node keeps its models through failed probes until its breaker opens
+  3. `nomic-embed-text` names searle's `nomic-embed-text:latest`
+  4. The live run against searle matched `ollama ps`, and found one bug
+  5. Callers are refused before anything opens, and `/v1/models` names models as a client sends them
+
+  **Readout**:
+
+  ```text
+  steps        4 of 4 landed
+               - 4 98dc0ce · 5 8c4fe77 · 6 ed7d769 · 7 86d6308
+  check        green: 3 of 9 checks, 4 landings · without 6 others
+  done-when    met
+  decisions    honored:
+               - D10 (privacy-quality-speed-cost)
+               - D13 (leases)
+               - D14 (pinning)
+               - D16 (hung-work-recovered)
+               - D21 (every-request-has-caller)
+               - D24 (one-yaml-entry-per-node)
+               - D25 (health-where-plato-looks)
+               - D27 (deps-when-first-imported)
+               - D29 (laptop-overrides)
+               - D30 (auth-arrives-with-models)
+               - D34 (timers-injectable)
+               - D38 (models-list-filters-auto)
+               - D41 (candidate-two-tiers)
+               - D42 (refuse-claude-env-names)
+  constraints  17 of 17 honored
+  seam         strayed: 14 paths outside 3 steps' seams
+               - step 4: 3 paths
+               - step 6: packages/penfield/src/catalogue/catalogue.ts and 2 others
+               - step 7: packages/penfield/src/cli.ts and 7 others
+  diff         +2778 -146 across 43 files
+               - packages/penfield/src/catalogue/__tests__/catalogue.test.ts +141 -0
+               - packages/penfield/src/catalogue/__tests__/discover.test.ts +159 -0
+               - packages/penfield/src/catalogue/__tests__/merge.test.ts +254 -0
+               - packages/penfield/src/catalogue/catalogue.ts +78 -5
+               - packages/penfield/src/catalogue/discover_http.ts +37 -0
+               - packages/penfield/src/catalogue/discover_ollama.ts +46 -0
+               - packages/penfield/src/catalogue/discover_openai.ts +25 -0
+               - and 36 more
+  spent        26 min · green first run at every landing · 3 drift warnings
+  ```
+
+  **Verdict**: ◐ A hair off (seam strayed)
+
+  **Harvested**: 5 of 10 parked ideas open
+
+  | Park | What it is | Why it matters | Lean |
+  | --- | --- | --- | --- |
+  | P6 · Readiness ping resets keep_alive | the readiness ping omits keep_alive, so Ollama resets the pinged model's expiry to OLLAMA_KEEP_ALIVE: a model loaded with keep_alive -1 drops to the default; the Q2 spike should compare expires_at in /api/ps before and after a ping | a ping could have shortened a model's stay in memory, and on searle it does not | tangent: the spike showed a ping leaves a `keep_alive: -1` expiry untouched on Ollama 0.34.2, so there is nothing to fix |
+  | P7 · llama-swap as a searle backend | llama-swap on searle for one big model at a time and backends Ollama lacks (llama.cpp flags, mlx_lm, vLLM): it is an openai_compatible node today with residency unknown; a discoverer reading its running-model endpoint would keep pins and cold_load honest (Stage E, more nodes) | it opens backends Ollama lacks, but hides residency from placement unless penfield reads what it has loaded | tangent: Ollama's own scheduler covers one big model at a time for now, and a llama-swap node is Stage E's more-nodes work |
+  | P8 · Memory-aware cold loads | step 10's cold_load check should be memory-aware: a cold load goes ahead only when the model fits in the node's memory_gb beside its pinned and leased resident models (weights from discovery's size_bytes plus a KV allowance), else degrade or wait by the busy policy | without it a load can push searle's pinned 27B out through Ollama's own eviction | blocker: step 10's done-when refuses a cold load that would evict a pinned model, and only a fit against `memory_gb` can tell when one would |
+  | P9 · Readiness breaks embedding models | the readiness ping sends /api/generate to every resident model, and an embedding model answers 400 'does not support generate', which the prober treats as a hang: unload_on_hang unloaded nomic-embed-text on searle and opened its breaker; readiness should count only a timeout as not ready, and ping an embedding model through /api/embed or not at all | the `embed` profile's model is unloaded and its breaker opened, so placement would skip it | blocker: with `ready_prompt` on, the gateway unloads searle's embedding model whenever a readiness tick finds it resident, so it becomes a fix step at the head of range 3 |
+  | P10 · House qwen3 4b tag mismatch | the house file's classify and extract candidate qwen3:4b-instruct-2507 matches no tag on searle, which has qwen3:4b-instruct-2507-q4_K_M, so the gateway logs candidate_missing for both at every boot; rename it in deploy/penfield.example.yaml | `classify` and `extract` lose a candidate on searle, and every boot logs it as missing | blocker: a one-line rename in the house file, riding P9's fix step |
+
+  **Recommendation**: Approve, keeping Q2's ping on once P9's fix lands and leaving searle's context as it is. Q2's warm pings are 81 to 119 ms and load nothing, so `ready_prompt` stays true, but only after the fix: today the ping unloads embedding models. Q1 is answered by the 131072 the 35B already runs with; keep the overlay's `context: 65536` as the budget the router reads, and check `launchctl getenv OLLAMA_CONTEXT_LENGTH` on searle when convenient. P9 and P10 become one fix step at the head of range 3, P8 folds into step 10's done-when, and P6 and P7 close as tangents.
+
+  **1.** Steps 4, 6 and 7 landed a hair off, for shared code and the `serve` wiring the live stop needs
+
+  Step 4 added two shared files outside its seam: `catalogue/discover_http.ts` (the one GET both discoverers use) and `test/helpers/fake_http.ts` (the recording server under both fakes). It also excluded `src/**/__tests__` from the package `tsconfig.json`, because a unit test that imports `test/helpers/` broke `rootDir`. `tsconfig.test.json` still type-checks every test, and `dist/` no longer carries them.
+
+  Step 6 added `src/clock.ts` (the `Clock` type that leases and the proxy will take too, per D34 (timers-injectable)). It also exported `discover_node` from the catalogue, so the prober reads one node at a time with its key resolved in one place.
+
+  Step 7's seam had no `cli.ts`, but the live check runs `serve`, so `serve` had to load tokens and start the catalogue and the prober. That touched `cli.ts`, `wire/server.ts` and `wire/healthz.ts`, and step 3's tests. The serve e2e now boots a copy of the house config with searle on the fake Ollama. Otherwise it would have probed the real searle (readiness pings included) on every test run. No later step's seam names `cli.ts` until step 17, so expect strays there again.
+
+  **2.** A node keeps its models through failed probes until its breaker opens
+
+  Below `open_after`, a node that was up keeps its last models in the snapshot, so one slow probe on a busy searle does not empty placement for ten seconds. It shows `down`, and its candidates turn into `candidate_missing`, only once the breaker opens or when it was never up. A failed half-open probe re-opens the breaker without a new incident, so a night with searle off writes one `breaker_open`, not a row every 30 s. Readiness runs every sixth interval (60 s at the house's 10 s), or at once after a failed probe. The file has no key for that interval yet.
+
+  **3.** `nomic-embed-text` names searle's `nomic-embed-text:latest`
+
+  Ollama lists a bare pull as `name:latest`, and the house file says `nomic-embed-text` in the `embed` profile and in nurselog's `models:`. The catalogue treats `x` and `x:latest` as the same model for candidates, pins, slot keys and the overlay. Without that, `embed` would read as missing on searle and nurselog would see one model instead of two. `/v1/models` lists the tag as the node has it (`nomic-embed-text:latest`).
+
+  **4.** The live run against searle matched `ollama ps`, and found one bug
+
+  I ran D29's command from the laptop with a fresh `~/.config/penfield/tokens` (four callers, mode 600). The banner listed all four callers, and `/healthz` showed searle `up`. The resident models in `/v1/models` matched `/api/ps` exactly (`qwen3.6:35b-mlx`), and so did all 17 tags. Night-shift saw no `claude/*`, and nurselog saw only `qwen3.8:27b-mlx` and `nomic-embed-text:latest`. No token and a bad token were both 401.
+
+  Q2: a cold load of the 35B took 3.6 s (21.9 GB in memory). Warm empty-prompt pings took 81, 119 and 89 ms and loaded nothing else. P6 does not hold on Ollama 0.34.2: after loading with `keep_alive: -1`, a ping without `keep_alive` left `expires_at` in 2319.
+
+  Q1: the loaded 35B reports `context_length` 131072, so a 64k prompt reaches it whole. SSH to searle is refused, so I could not read whether that is `OLLAMA_CONTEXT_LENGTH` 65536 times `OLLAMA_NUM_PARALLEL` 2, or Ollama's own default.
+
+  The bug (P9): loading `nomic-embed-text` for the embeddings fixture made it resident, and the next readiness ping sent it `/api/generate`. It answered 400 (`does not support generate`), which the prober read as a hang. Under `unload_on_hang` it unloaded the model, failed the reload the same way, and opened that model's breaker. The house profile name `qwen3:4b-instruct-2507` matches no tag on searle (P10), so `classify` and `extract` log `candidate_missing` at every boot. The pinned 27B is cold: a pin protects a resident model and loads nothing, so nurselog's first request will cold-load it.
+
+  The fixtures for plan step 13 are in `packages/penfield/test/fixtures/ollama/`. They are a streamed chat with reasoning off (22 lines), the first 12 chunks and the last three events of a 9,385-token reasoning stream (the full capture was 1.9 MB), and one embeddings response. They are untracked and ride the next checkpoint. I unloaded the 35B afterwards, so searle is back to nothing loaded.
+
+  **5.** Callers are refused before anything opens, and `/v1/models` names models as a client sends them
+
+  A missing or malformed tokens file, or a line naming a caller `penfield.yaml` lacks, stops `serve` before it opens the state dir, with the line. An empty file boots, and the banner says every request but `/healthz` is refused. The auth hook is fail-closed: only `/healthz` is public, so an unknown path without a token is a 401, not a 404. In `/v1/models` a tag is listed bare (what a client sends for D6 (explicit-wins)), a decision node's model as `claude/<model>`, and a tag two nodes share as `node/tag` on both.

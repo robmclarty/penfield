@@ -1,13 +1,20 @@
 // The calls the prober makes to an Ollama node beside discovery: liveness, the
 // readiness ping, and the unload that recovery sends. None throws; each says how
-// long it took, by the prober's clock.
+// long it took, by the prober's clock, and a failure says how it failed.
 
-export type Outcome = { ok: true; ms: number } | { ok: false; ms: number; reason: string };
+// D45's classes: `hang` is no answer within the timeout; `server` an HTTP 5xx;
+// `client` any other HTTP error, which means the node answered; `unreachable` a
+// refused or broken connection.
+type Failure = 'hang' | 'server' | 'client' | 'unreachable';
+
+export type Outcome = { ok: true; ms: number } | { ok: false; ms: number; reason: string; failure: Failure };
 
 type Request = { method: 'GET' } | { method: 'POST'; body: Record<string, unknown> };
 
+const timed_out = (error: unknown): boolean => error instanceof Error && error.name === 'TimeoutError';
+
 const describe_error = (error: unknown, timeout_ms: number): string => {
-  if (error instanceof Error && error.name === 'TimeoutError') return `no answer in ${timeout_ms} ms`;
+  if (timed_out(error)) return `no answer in ${timeout_ms} ms`;
   if (error instanceof Error) return error.cause instanceof Error ? error.cause.message : error.message;
   return String(error);
 };
@@ -30,9 +37,12 @@ export const call = async (
     });
     await response.arrayBuffer();
     const ms = now() - started;
-    return response.ok ? { ok: true, ms } : { ok: false, ms, reason: `${label}: HTTP ${response.status}` };
+    if (response.ok) return { ok: true, ms };
+    const failure = response.status >= 500 ? 'server' : 'client';
+    return { ok: false, ms, reason: `${label}: HTTP ${response.status}`, failure };
   } catch (error) {
-    return { ok: false, ms: now() - started, reason: `${label}: ${describe_error(error, timeout_ms)}` };
+    const failure = timed_out(error) ? 'hang' : 'unreachable';
+    return { ok: false, ms: now() - started, reason: `${label}: ${describe_error(error, timeout_ms)}`, failure };
   }
 };
 

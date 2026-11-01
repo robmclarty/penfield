@@ -42,8 +42,8 @@ models:
 
 profiles:
   embed:      { candidates: [nomic-embed-text, qwen3-embedding:0.6b] }
-  classify:   { candidates: [qwen3:4b-instruct-2507, gemma4:e4b] }
-  extract:    { candidates: [qwen3.6:35b-mlx, qwen3:4b-instruct-2507] }
+  classify:   { candidates: [qwen3:4b-instruct-2507-q4_K_M, gemma4:e4b] }
+  extract:    { candidates: [qwen3.6:35b-mlx, qwen3:4b-instruct-2507-q4_K_M] }
   summarize:  { candidates: [qwen3.6:35b-mlx, gemma4:26b, qwen3.8:27b-mlx] }
   chat:       { candidates: [qwen3.6:35b-mlx, qwen3.8:27b-mlx, claude/sonnet@low] }
   code-light: { candidates: [qwen3.8:27b-mlx, qwen3.6:35b-mlx, claude/sonnet@medium] }

@@ -5,7 +5,8 @@ import type { FakeServer, RecordedRequest } from './fake_http.js';
 
 // A fake Ollama: `GET /api/version`, `GET /api/tags` listing `tags`, `GET /api/ps`
 // listing the `resident` ones, and `POST /api/generate` with an empty prompt
-// (loads a model) or `keep_alive: 0` (unloads it), each in Ollama's own shape. Any
+// (loads a model, or answers as an embedding model or a crashed runner would) or
+// `keep_alive: 0` (unloads it), each in Ollama's own shape. Any
 // other path is a 404. Every request is recorded. `state` is live: a test changes
 // it and the next request sees the change.
 
@@ -18,6 +19,10 @@ export type FakeOllamaState = {
   fail: 'none' | 'error' | 'hang';
   // Models whose `/api/generate` never answers: resident but wedged.
   hung: string[];
+  // Models that only embed, whose `/api/generate` Ollama answers 400.
+  embedding: string[];
+  // Models whose runner has died, whose `/api/generate` answers 500.
+  crashed: string[];
   // Whether an unload frees a hung model, so the reload after it answers.
   unload_clears_hang: boolean;
 };
@@ -61,6 +66,14 @@ const generate = (state: FakeOllamaState, request: RecordedRequest, response: Se
     return;
   }
   if (state.hung.includes(model)) return;
+  if (state.embedding.includes(model)) {
+    send_json(response, 400, { error: `"${model}" does not support generate` });
+    return;
+  }
+  if (state.crashed.includes(model)) {
+    send_json(response, 500, { error: 'llama runner process has terminated: signal: killed' });
+    return;
+  }
   if (!state.tags.includes(model)) {
     send_json(response, 404, { error: `model "${model}" not found, try pulling it first` });
     return;
@@ -76,6 +89,8 @@ export const start_fake_ollama = async (initial: Partial<FakeOllamaState> = {}):
     context_length: 65_536,
     fail: 'none',
     hung: [],
+    embedding: [],
+    crashed: [],
     unload_clears_hang: true,
     ...initial,
   };

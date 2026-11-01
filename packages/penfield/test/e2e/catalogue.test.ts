@@ -168,9 +168,9 @@ describe('GET /catalogue', () => {
     // The house profiles name models the fake does not have.
     expect(body.warnings.map(({ candidate }) => candidate)).toEqual([
       'qwen3-embedding:0.6b',
-      'qwen3:4b-instruct-2507',
+      'qwen3:4b-instruct-2507-q4_K_M',
       'gemma4:e4b',
-      'qwen3:4b-instruct-2507',
+      'qwen3:4b-instruct-2507-q4_K_M',
     ]);
   });
 });

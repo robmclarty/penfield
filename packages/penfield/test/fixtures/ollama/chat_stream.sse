@@ -1,0 +1,22 @@
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"content":" there"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"content":","},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"content":" nice"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"content":" meeting"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"content":" you"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"content":" today"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"content":"."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-526","object":"chat.completion.chunk","created":1793496742,"model":"qwen3.6:35b-mlx","system_fingerprint":"fp_ollama","choices":[],"usage":{"prompt_tokens":18,"prompt_tokens_details":{"cached_tokens":12},"completion_tokens":8,"total_tokens":26}}
+
+data: [DONE]
+
