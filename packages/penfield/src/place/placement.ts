@@ -304,11 +304,16 @@ const preferred_order = (options: readonly Option[], prefer: Prefer | undefined)
 };
 
 // `allow` takes the candidates in rank order, a cold load as good as a resident
-// model; `avoid` takes every ready candidate before any cold load; `never` loads nothing.
+// model, and `never` loads nothing. D48: under `avoid`, a ready local candidate goes
+// ahead of the cold loads ranked above it, while a Claude decision keeps its rank,
+// so a cold load gives way only to a local model that serves without one.
 const pool_of = (options: readonly Option[], cold_load: Context['cold_load']): Option[] => {
-  if (cold_load === 'allow') return options.filter(({ ready, loadable }) => ready || loadable);
-  const ready = options.filter((option) => option.ready);
-  return cold_load === 'avoid' ? [...ready, ...options.filter(({ loadable }) => loadable)] : ready;
+  const pool = options.filter(({ ready, loadable }) => ready || loadable);
+  const first_cold = pool.findIndex(({ cold }) => cold);
+  if (cold_load !== 'avoid' || first_cold === -1) return pool;
+  const local = ({ ready, target }: Option): boolean => ready && target.kind === 'proxy';
+  const below = pool.slice(first_cold);
+  return [...pool.slice(0, first_cold), ...below.filter(local), ...below.filter((each) => !local(each))];
 };
 
 const cold_reasons = (options: readonly Option[], cold_load: Context['cold_load']): string[] =>

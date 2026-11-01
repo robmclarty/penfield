@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 12 — feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
+**Current step:** 22 — fix(place): under `avoid`, a cold local load outranks a Claude decision ranked below it (range 5's P21)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -34,7 +34,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
 - ☑ 10. feat(place): leases and placement (spec step 11)
 - ☑ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
-- ☐ 12. feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
+- ☑ 12. feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
 - ☐ 13. feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
 - ☐ 14. feat(wire): chat completions and embeddings end to end (spec step 15)
 - ☐ 15. feat(wire): Zed's native agent on the gateway (spec step 16)
@@ -44,6 +44,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☐ 19. docs: README, decisions.md and the playbook as shipped (spec step 20)
 - ☑ 20. fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
 - ☑ 21. fix(place): a cold load never asks Ollama to evict beside a resident pin (range 4's P16)
+- ☐ 22. fix(place): under `avoid`, a cold local load outranks a Claude decision ranked below it (range 5's P21)
 
 ## Park list
 
@@ -69,7 +70,9 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [x] Ollama's eviction is not pin-aware and OLLAMA_MAX_LOADED_MODELS caps residency by count: a cold load that fits beside the pinned model by memory_gb can still make Ollama unload the pinned 27B when the count cap is hit or it picks the pinned one as least recent; a per-node max_loaded in placement, or keep_alive -1 on pinned models, would close it
 - [x] searle's memory_gb is 48, but Metal's default GPU working-set limit on Apple Silicon sits below the full unified memory, so D44's fit may admit a load Ollama then splits to CPU or evicts for; set memory_gb to what Ollama reports usable, and check KV_ALLOWANCE (0.25) against /api/ps sizes on searle
 - [x] the reaper and the proxy's own deadline timer both release at deadline_at, so a reaper tick landing first records the lease as orphaned rather than deadline; step 13 should give the reaper a grace past deadline_at, or log the outcome from the proxy whatever release returns
-- [ ] with max_loaded 2 and both the pinned 27B and the 35B resident on searle, D46 refuses every cold load there, an embedding model included, so /v1/embeddings with auto fails until one unloads; OLLAMA_MAX_LOADED_MODELS 3 on searle, or an embedding model kept resident, would leave room
+- [x] with max_loaded 2 and both the pinned 27B and the 35B resident on searle, D46 refuses every cold load there, an embedding model included, so /v1/embeddings with auto fails until one unloads; OLLAMA_MAX_LOADED_MODELS 3 on searle, or an embedding model kept resident, would leave room
+- [x] prober.test.ts runs its hang cases at timeout_ms 300, which also times liveness and discovery against the local fake, so under a loaded gate (28 s against 6) /api/version or /api/tags can miss 300 ms, searle reads down, and 'a hung resident model ... is unloaded once' sees no generate at all; a fake-clock readiness timeout, or a longer liveness budget than the hang's, would keep it off the gate
+- [x] under cold_load avoid a Claude decision counts as ready and ranks ahead of a cold local load, and penfield never loads a pin, so on an idle searle (/api/ps empty at range 5's live stop) every auto chat from a cloud caller goes to claude/sonnet, and nothing penfield does for rob or zed-native ever loads a chat model there; a cold local candidate could give way only to a ready local one ranked below it, never to a decision
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -109,6 +112,10 @@ Harvest results this boundary:
 - **blocker**: park 16 · Ollama's eviction is not pin-aware and OLLAMA_MAX_LOADED_MODELS caps residency by count: a cold load that fits beside the pinned model by memory_gb can still make Ollama unload the pinned 27B when the count cap is hit or it picks the pinned one as least recent; a per-node max_loaded in placement, or keep_alive -1 on pinned models, would close it → step 10 promises a pinned model is never evicted, but Ollama picks what to unload, so the promise holds only for the memory fit; a fix step at the head of range 5 builds it on Opus beside the placement code, before step 14 sends real traffic
 - **tangent**: park 17 · searle's memory_gb is 48, but Metal's default GPU working-set limit on Apple Silicon sits below the full unified memory, so D44's fit may admit a load Ollama then splits to CPU or evicts for; set memory_gb to what Ollama reports usable, and check KV_ALLOWANCE (0.25) against /api/ps sizes on searle → `memory_gb` is a number in the house file you can change at any time, and the usable figure needs a reading on searle, best taken at range 7's live stop when real loads run
 - **blocker**: park 18 · the reaper and the proxy's own deadline timer both release at deadline_at, so a reaper tick landing first records the lease as orphaned rather than deadline; step 13 should give the reaper a grace past deadline_at, or log the outcome from the proxy whatever release returns → step 13's done-when says the lease is released exactly once and a deadline ends as `deadline`, but its seam lacks `place/reaper.ts`, which can take the release first; fold a grace past `deadline_at` into step 13 and add the reaper to its seam
+- 2026-11-01, at range 5 of 9's stop: 3 parked ideas, classified.
+- **tangent**: park 19 · with max_loaded 2 and both the pinned 27B and the 35B resident on searle, D46 refuses every cold load there, an embedding model included, so /v1/embeddings with auto fails until one unloads; OLLAMA_MAX_LOADED_MODELS 3 on searle, or an embedding model kept resident, would leave room → the cap is a number in the house file and on searle, and whether both chat models are resident at once is best read at range 7's live stop, beside P17
+- **tangent**: park 20 · prober.test.ts runs its hang cases at timeout_ms 300, which also times liveness and discovery against the local fake, so under a loaded gate (28 s against 6) /api/version or /api/tags can miss 300 ms, searle reads down, and 'a hung resident model ... is unloaded once' sees no generate at all; a fake-clock readiness timeout, or a longer liveness budget than the hang's, would keep it off the gate → it fails only when the gate runs loaded and passed on the rerun, and the fix touches only step 6's test, small enough for any boundary
+- **blocker**: park 21 · under cold_load avoid a Claude decision counts as ready and ranks ahead of a cold local load, and penfield never loads a pin, so on an idle searle (/api/ps empty at range 5's live stop) every auto chat from a cloud caller goes to claude/sonnet, and nothing penfield does for rob or zed-native ever loads a chat model there; a cold local candidate could give way only to a ready local one ranked below it, never to a decision → on an idle searle every `auto` chat from rob or Zed goes to Claude and nothing ever loads a local chat model, so the Frame's curl check and range 7's Zed chat cannot answer from searle; fold it as D48 and a fix step on Opus ahead of step 13
 
 ## Log
 
@@ -457,3 +464,78 @@ folder, so it rides the branch into the PR.)*
 
 - 2026-11-01 — step 21 checkpointed · 9b4926bd6 — fix(place): a cold load never asks Ollama to evict beside a resident pin (range 4's P16) (7m)
 - 2026-11-01 — step 11 checkpointed · ed659904a — feat(wire): request ids, the error envelope and fail-closed policy (spec step 13) (1 drift, 6m)
+- 2026-11-01 — step 12 checkpointed · 0b17e071c — feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12) (1 drift, 6m)
+- 2026-11-01 — range 5 of 9's stop recorded — the first `auto` decision, dry: `POST /route` against searle with a short question decides a resident chat candidate, and the `/decisions` row matches the response; this is spec range 3's stop
+
+  **Summary**: Range 5 closed range 4's pin gap and made the first decision. Step 21 lets a cold load go ahead beside a resident pin only when it needs no eviction at all, judged by memory and by a new per-node `max_loaded`. Step 11 puts a request id on every response, wraps every error in OpenAI's error shape, and sends a 403 when a caller names a model it may not use. Step 12 adds `POST /route`, which decides without taking a lease and logs the row, and `GET /decisions`, which reads that row back equal to the response. All three steps landed green on the first run. Steps 11 and 12 strayed outside their seams to wire the server and the CLI. Live on searle, the row matched the response, but the decision went to Claude: searle had nothing loaded, and under `avoid` a Claude decision outranks a cold load (P21).
+
+  1. Live on searle, the row matched the response, but the decision was Claude, because searle had nothing loaded (P21)
+  2. Steps 11 and 12 strayed outside their seams to wire the server and the CLI
+  3. On searle at `max_loaded: 2`, nothing cold-loads while the pinned 27B and the 35B are both resident (P19)
+  4. A refused decision's reason is read back from its last reason line, because no column holds it
+  5. `/route` returns 200 for every decision except the policy's 403, refusals included
+
+  **Readout**:
+
+  ```text
+  steps        3 of 3 landed
+               - 11 ed65990 · 12 0b17e07 · 21 9b4926b
+  check        green: 9 of 9 checks, 3 landings
+  done-when    met
+  decisions    honored:
+               - D46 (ollama-picks-the-evictee)
+               - D30 (auth-arrives-with-models), D38 (models-list-filters-auto)
+               - D31 (log-carries-route-input), D43 (decision-policy-column)
+  constraints  17 of 17 honored
+  seam         strayed: 9 paths outside 2 steps' seams
+               - step 11: packages/penfield/src/wire/openai.ts and 2 others
+               - step 12: packages/penfield/src/cli.ts and 5 others
+  diff         +1159 -87 across 27 files
+               - deploy/penfield.example.yaml +1 -0
+               - packages/penfield/src/catalogue/__tests__/merge.test.ts +12 -0
+               - packages/penfield/src/catalogue/merge.ts +19 -14
+               - packages/penfield/src/cli.ts +10 -2
+               - packages/penfield/src/config/__tests__/load.test.ts +16 -0
+               - packages/penfield/src/config/schema.ts +2 -0
+               - packages/penfield/src/index.ts +2 -2
+               - and 20 more
+  spent        20 min · green first run at every landing · 2 drift warnings
+  ```
+
+  **Verdict**: ◐ A hair off (seam strayed)
+
+  **Harvested**: **3** of 21 parked ideas open
+
+  | Park | What it is | Why it matters | Lean |
+  | --- | --- | --- | --- |
+  | P19 · Embeddings at the cap | with max_loaded 2 and both the pinned 27B and the 35B resident on searle, D46 refuses every cold load there, an embedding model included, so /v1/embeddings with auto fails until one unloads; OLLAMA_MAX_LOADED_MODELS 3 on searle, or an embedding model kept resident, would leave room | with both chat models resident on searle, every embeddings request would be refused | tangent: the cap is a number in the house file and on searle, and whether both chat models are resident at once is best read at range 7's live stop, beside P17 |
+  | P20 · Prober hang test flakes | prober.test.ts runs its hang cases at timeout_ms 300, which also times liveness and discovery against the local fake, so under a loaded gate (28 s against 6) /api/version or /api/tags can miss 300 ms, searle reads down, and 'a hung resident model ... is unloaded once' sees no generate at all; a fake-clock readiness timeout, or a longer liveness budget than the hang's, would keep it off the gate | a red gate on a flake holds the end of every turn until a rerun | tangent: it fails only when the gate runs loaded and passed on the rerun, and the fix touches only step 6's test, small enough for any boundary |
+  | P21 · Idle searle sends chat to Claude | under cold_load avoid a Claude decision counts as ready and ranks ahead of a cold local load, and penfield never loads a pin, so on an idle searle (/api/ps empty at range 5's live stop) every auto chat from a cloud caller goes to claude/sonnet, and nothing penfield does for rob or zed-native ever loads a chat model there; a cold local candidate could give way only to a ready local one ranked below it, never to a decision | the house's `auto` chat answers from Claude, or with a hint, whenever searle has unloaded | blocker: on an idle searle every `auto` chat from rob or Zed goes to Claude and nothing ever loads a local chat model, so the Frame's curl check and range 7's Zed chat cannot answer from searle; fold it as D48 and a fix step on Opus ahead of step 13 |
+
+  **Recommendation**: Confirm P21 as a blocker and P19 and P20 as tangents, then finish the stop's resident half by loading the 35B and asking again. The row half held live. P21's rule reverses step 10's section 3, which you approved at range 4, so it is your call; without it, `auto` chat from a cloud caller never wakes searle. To see a resident candidate decided today, load the 35B on searle:
+
+  ```sh
+  curl -s http://192.168.1.90:11434/api/generate -d '{"model":"qwen3.6:35b-mlx","keep_alive":"30m"}'
+  ```
+
+  Then rerun your two curls: the target should be `searle/qwen3.6:35b-mlx`, resident, and the row should match it again.
+
+  **1.** Live on searle, the row matched the response, but the decision was Claude, because searle had nothing loaded (P21)
+
+  Your `/route` call and its `/decisions` row agree field for field; only the key order differs, and the outcome columns are null as a dry row's should be. searle's `/api/ps` was empty when I read it just after, and the running gateway's `/catalogue` agreed: every chat model cold, the pinned 27B included. Under `cold_load: avoid`, step 10 counts a Claude decision as ready, so `claude/sonnet@low` ranked ahead of both cold loads, and the 35B and the 27B came back as its alternatives. That is the rule you approved at range 4 (step 10's section 3), and the live run shows what it costs. Penfield never loads a pin, and for a caller allowed cloud nothing penfield does ever loads a chat model, so an idle searle stays idle: rob's `auto` chat goes to Claude, and Zed's becomes a hint message instead of an answer at range 7's stop. The stop's other half, a resident candidate, could not be shown with nothing resident. P21 proposes the rule: under `avoid`, a cold local candidate gives way only to a ready local one ranked below it, never to a Claude decision, which keeps its rank. Over the house profiles: idle chat cold-loads the 35B; chat with the 35B resident takes it; code-light with the 35B resident takes it over the cold 27B; code-heavy still takes opus first.
+
+  **2.** Steps 11 and 12 strayed outside their seams to wire the server and the CLI
+
+  Request ids and the error envelope need a hook and two handlers in `wire/server.ts`, which step 11's seam does not list. Step 11 also changed `wire/openai.ts`: the `/v1/models` filter now calls the same `bar_of` as the 403. So a model the list shows can never be refused, and a model it hides always is; one test checks this for every caller and every model. The e2e 401 expectation in `test/e2e/catalogue.test.ts` gained the envelope's `param` and `request_id`. Step 12 registered `/route` and `/decisions` in `server.ts`. It passed the server the clock, the decision log and the log's reader through `cli.ts`, and exported the two new UI functions from the `ui` barrel. The three wire tests that build a server got the new deps as well. None of these changes does anything the plan does not ask for.
+
+  **3.** On searle at `max_loaded: 2`, nothing cold-loads while the pinned 27B and the 35B are both resident (P19)
+
+  D46 holds that while a pinned model is resident, every resident model must stay. With two models resident and a cap of 2, any third model is refused, an embedding model included. `/v1/embeddings` with `auto` would then fail until one of the two unloads. At range 2's live run only the 35B was resident, so this may rarely bite. Both fixes are config, not code: `OLLAMA_MAX_LOADED_MODELS 3` on searle with `max_loaded: 3` in the house file, or keeping an embedding model resident. Two smaller notes. A refused cold load is a skip, as under D44, and the busy policy then works over the candidates left; `degraded_from` stays unset, since it marks a busy model, not a cold one. With no pin resident, the reason strings are D44's word for word, so its tests pass unchanged.
+
+  **4.** A refused decision's reason is read back from its last reason line, because no column holds it
+
+  Spec §5.5 stores a target as kind, node, model and effort, so the read has to rebuild two things. A proxy target's format comes from the input column, since a request is always forwarded in its own format (C1). A refusal's reason comes from the decision's last reason line, because every refusal path ends on it. The ladder writes the reason as it stands; placement and policy write it after a `place: refused:` or `policy: refused:` prefix. The e2e reads back both a ladder refusal and a policy 403. The alternative is a `target_reason` column, added in the same `user_version` 2 migration as D43's `policy`. That would be a new decision, so I did not make it. It is a few lines if you would rather not depend on how the reasons are worded.
+
+  **5.** `/route` returns 200 for every decision except the policy's 403, refusals included
+
+  A body the router cannot read gets a 400 and leaves no row. A caller naming a model it may not use gets a 403 with the reason and the decision id, and the row is logged with outcome `refused`. An unknown model, a busy node, or no candidate at all returns 200 with a refused target, because the Decision is the answer `/route` exists to give. Chat completions in step 14 will need their own mapping (a 404 `model_not_found` for an unknown model, a 503 when busy). The envelope puts `request_id` and `decision_id` inside `error`, and the 403 uses the type `permission_error`. A dry row's outcome is null. `/decisions` shows every caller's rows to whoever asks, like `/catalogue`, and never returns prompt text.

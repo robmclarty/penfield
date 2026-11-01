@@ -13,6 +13,7 @@ import type { Running } from '../helpers/run_serve.js';
 
 // Plan step 12 against the fake Ollama, with one chat model resident: POST /route
 // decides dry and logs the row, and GET /decisions reads it back as it was sent.
+// Plan step 22 boots a second gateway over a searle with nothing loaded (D48).
 
 const TOKEN = {
   rob: 'tok_rob_5f2a9c1e',
@@ -23,15 +24,15 @@ const TAGS = ['qwen3.8:27b-mlx', 'qwen3.6:35b-mlx', 'gemma4:26b', 'nomic-embed-t
 
 const QUESTION = { model: 'auto', messages: [{ role: 'user', content: 'what is the capital of France?' }] };
 
-let dir = '';
-let ollama: FakeOllama;
-let running: Running;
+type Gateway = { dir: string; ollama: FakeOllama; running: Running; address: string };
+
+let gateway: Gateway;
 let address = '';
 
 const authorized = (token: string) => ({ authorization: `Bearer ${token}` });
 
-const post = (body: unknown, token: string): Promise<Response> =>
-  fetch(`${address}/route`, {
+const post = (body: unknown, token: string, at = address): Promise<Response> =>
+  fetch(`${at}/route`, {
     method: 'POST',
     headers: { ...authorized(token), 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -59,27 +60,37 @@ const logged = async (query: string): Promise<Decision[]> => {
 // What a dry decision's row adds to it: the outcome columns, all still empty.
 const DRY = { outcome: null, first_byte_ms: null, total_ms: null, bytes_out: null, upstream_status: null, upstream_prompt_tokens: null };
 
-beforeAll(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'penfield-route-'));
-  ollama = await start_fake_ollama({ tags: TAGS, resident: ['qwen3.6:35b-mlx'] });
-  running = serve([
+// The house file served over a fake searle with `resident` loaded, once it reads up.
+const boot = async (resident: string[]): Promise<Gateway> => {
+  const dir = mkdtempSync(join(tmpdir(), 'penfield-route-'));
+  const ollama = await start_fake_ollama({ tags: TAGS, resident });
+  const running = serve([
     '--config', house_config(dir, ollama.url),
     '--listen', '127.0.0.1:0',
     '--state-dir', join(dir, 'state'),
     '--tokens-file', TOKENS,
   ]);
-  address = await booted(running);
+  const at = await booted(running);
   await vi.waitFor(async () => {
-    const { body } = await get('/healthz');
-    expect((body as { nodes: unknown[] }).nodes[0]).toMatchObject({ name: 'searle', state: 'up' });
+    const response = await fetch(`${at}/healthz`, { headers: authorized(TOKEN.rob) });
+    const body = (await response.json()) as { nodes: unknown[] };
+    expect(body.nodes[0]).toMatchObject({ name: 'searle', state: 'up' });
   });
-});
+  return { dir, ollama, running, address: at };
+};
 
-afterAll(async () => {
+const shut = async ({ dir, ollama, running }: Gateway): Promise<void> => {
   await running.stop();
   await ollama.close();
   rmSync(dir, { recursive: true, force: true });
+};
+
+beforeAll(async () => {
+  gateway = await boot(['qwen3.6:35b-mlx']);
+  address = gateway.address;
 });
+
+afterAll(() => shut(gateway));
 
 describe('POST /route decides dry', () => {
   test('auto with a short question: rule, chat, the resident model, its ranked alternatives and reasons', async () => {
@@ -93,10 +104,10 @@ describe('POST /route decides dry', () => {
       rung: 'rule',
       confidence: 1,
       target: { kind: 'proxy', node: 'searle', model: 'qwen3.6:35b-mlx', format: 'openai' },
-      // Under the house's `cold_load: avoid`, a Claude decision ranks before a cold load.
+      // Under the house's `cold_load: avoid`, a Claude decision keeps its rank behind a cold load (D48).
       alternatives: [
-        { kind: 'claude_decision', model: 'sonnet', effort: 'low' },
         { kind: 'proxy', node: 'searle', model: 'qwen3.8:27b-mlx', format: 'openai' },
+        { kind: 'claude_decision', model: 'sonnet', effort: 'low' },
       ],
       placement: { resident: true, cold_load: false, waited_ms: 0 },
       policy: { max_privacy: 'cloud', busy: 'degrade' },
@@ -134,11 +145,39 @@ describe('POST /route decides dry', () => {
   });
 });
 
+describe('with nothing resident on searle (D48)', () => {
+  let idle: Gateway;
+
+  beforeAll(async () => {
+    idle = await boot([]);
+  });
+
+  afterAll(() => shut(idle));
+
+  test('auto with a short question cold-loads the 35B, not Claude, which stays among its alternatives', async () => {
+    const response = await post(QUESTION, TOKEN.rob, idle.address);
+    expect(response.status).toBe(200);
+    const decision = (await response.json()) as Decision & { reasons: string[] };
+    expect(decision).toMatchObject({
+      profile: 'chat',
+      target: { kind: 'proxy', node: 'searle', model: 'qwen3.6:35b-mlx', format: 'openai' },
+      alternatives: [
+        { kind: 'proxy', node: 'searle', model: 'qwen3.8:27b-mlx', format: 'openai' },
+        { kind: 'claude_decision', model: 'sonnet', effort: 'low' },
+      ],
+      placement: { resident: false, cold_load: true, waited_ms: 0 },
+    });
+    expect(decision.reasons.at(-1)).toMatch(/^place: chose searle\/qwen3\.6:35b-mlx, a cold load: .* fits; 2 of 2 slots free$/);
+    // Deciding dry loads nothing.
+    expect(idle.ollama.state.resident).toEqual([]);
+  });
+});
+
 describe('the decisions row', () => {
   test('equals the response, policy included (D43)', async () => {
     const decision = await decided(QUESTION, TOKEN.rob);
     expect(await logged('caller=rob&limit=1')).toEqual([{ ...decision, ...DRY }]);
-    const db = new DatabaseSync(join(dir, 'state', DB_FILE), { readOnly: true });
+    const db = new DatabaseSync(join(gateway.dir, 'state', DB_FILE), { readOnly: true });
     const row = db.prepare('select policy, prompt, input from decisions where id = ?').get(decision.id);
     db.close();
     expect(JSON.parse(String(row?.['policy']))).toEqual(decision.policy);

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -388,6 +388,107 @@ describe('a resident pin, and the count Ollama keeps loaded (D46)', () => {
     expect(decision.reasons.at(-1)).toBe(
       `place: chose ${GEMMA}, a cold load: 20.0 GB beside 75.0 GB resident in 96 GB fits, so nothing is evicted beside pinned ${QWEN27}; 2 of 2 slots free`,
     );
+  });
+});
+
+// The house file's own profiles and searle (48 GB, max_loaded 2, the 27B pinned),
+// with the test's model sizes: the 35B takes 25 GB loaded, the 27B and the 26B 20.
+const HOUSE_FILE = readFileSync(new URL('../../../../../deploy/penfield.example.yaml', import.meta.url), 'utf8');
+const HOUSE = loaded(HOUSE_FILE);
+
+type OnHouse = { config?: Config; in_use?: Record<string, number> };
+
+const on_house = (profile: string, resident: readonly Ids[], { config: c = HOUSE, in_use = {} }: OnHouse = {}): Decision =>
+  decide(to_profile(profile), 'rob', {
+    config: c,
+    in_use,
+    catalogue: merge_catalogue(c, { seen: { searle: { discovery: searle(resident), at: AT } }, breakers: { nodes: {}, models: {} } }),
+  });
+
+describe('under avoid, a cold load gives way only to a ready local candidate (D48)', () => {
+  test('with nothing resident, auto chat for rob cold-loads the 35B, the 27B and Claude behind it', () => {
+    const decision = on_house('chat', []);
+    expect(decision.target).toEqual({ kind: 'proxy', node: 'searle', model: 'qwen3.6:35b-mlx', format: 'openai' });
+    expect(decision.alternatives).toEqual([
+      { kind: 'proxy', node: 'searle', model: 'qwen3.8:27b-mlx', format: 'openai' },
+      { kind: 'claude_decision', model: 'sonnet', effort: 'low' },
+    ]);
+    expect(decision.placement).toEqual({ resident: false, cold_load: true, waited_ms: 0 });
+    expect(decision.reasons.at(-1)).toBe(`place: chose ${QWEN35}, a cold load: 25.0 GB beside 0.0 GB pinned or leased in 48 GB fits; 2 of 2 slots free`);
+  });
+
+  test('chat with the 35B resident takes it', () => {
+    const decision = on_house('chat', ['qwen3.6:35b-mlx']);
+    expect(target_ref(decision)).toBe(QWEN35);
+    expect(decision.placement).toEqual({ resident: true, cold_load: false, waited_ms: 0 });
+  });
+
+  test('code-light with the 35B resident takes it over the cold 27B ranked above it', () => {
+    const decision = on_house('code-light', ['qwen3.6:35b-mlx']);
+    expect(target_ref(decision)).toBe(QWEN35);
+    expect(decision.alternatives).toEqual([
+      { kind: 'proxy', node: 'searle', model: 'qwen3.8:27b-mlx', format: 'openai' },
+      { kind: 'claude_decision', model: 'sonnet', effort: 'medium' },
+    ]);
+  });
+
+  test('summarize with only the pinned 27B resident takes the 27B over the cold 35B and 26B', () => {
+    const decision = on_house('summarize', ['qwen3.8:27b-mlx']);
+    expect(target_ref(decision)).toBe(QWEN27);
+    expect(decision.alternatives.map((each) => (each.kind === 'proxy' ? each.model : each.kind))).toEqual(['qwen3.6:35b-mlx', 'gemma4:26b']);
+  });
+
+  test('code-heavy still decides opus at high first, whatever is resident', () => {
+    expect(target_ref(on_house('code-heavy', []))).toBe('claude/opus@high');
+    expect(target_ref(on_house('code-heavy', ['qwen3.8:27b-mlx']))).toBe('claude/opus@high');
+  });
+
+  test('a decision keeps its rank behind a cold load, while a ready local model below both goes first', () => {
+    // gemma cold, then sonnet, then the resident 35B: the 35B jumps the load, sonnet does not.
+    const mixed = loaded(CONFIG.replace('candidates: [gemma4:26b, qwen3.6:35b-mlx]', 'candidates: [gemma4:26b, claude/sonnet@low, qwen3.6:35b-mlx]'));
+    const roomy = house({ config: mixed, searle: searle(['qwen3.6:35b-mlx']) });
+    const decision = decide(to_profile('summarize'), 'rob', { config: mixed, catalogue: roomy });
+    expect(target_ref(decision)).toBe(QWEN35);
+    expect(decision.alternatives).toEqual([
+      { kind: 'proxy', node: 'searle', model: 'gemma4:26b', format: 'openai' },
+      { kind: 'claude_decision', model: 'sonnet', effort: 'low' },
+    ]);
+  });
+
+  test('a cold load D44 refuses gives way to the next in rank, a cold load or a decision', () => {
+    // In 24 GB the 35B's 25 does not fit and the 27B's 20 does; in 16 neither does.
+    const next = on_house('chat', [], { config: loaded(HOUSE_FILE.replace('memory_gb: 48', 'memory_gb: 24')) });
+    expect(skipped(next)).toEqual([
+      `place: skipped ${QWEN35}: it is cold, and a load 25.0 GB beside 0.0 GB pinned or leased in 24 GB does not fit, and nothing must stay`,
+    ]);
+    expect(target_ref(next)).toBe(QWEN27);
+    const neither = on_house('chat', [], { config: loaded(HOUSE_FILE.replace('memory_gb: 48', 'memory_gb: 16')) });
+    expect(skipped(neither)).toHaveLength(2);
+    expect(target_ref(neither)).toBe('claude/sonnet@low');
+  });
+
+  test('a cold load D46 refuses gives way to the next in rank, down to a decision when the pin is busy', () => {
+    // The pinned 27B holds its one slot and the 26B is resident beside it, so the 35B
+    // could load only by an eviction Ollama might aim at the pin.
+    const decision = on_house('chat', ['qwen3.8:27b-mlx', 'gemma4:26b'], { in_use: { [QWEN27]: 1 } });
+    expect(skipped(decision)).toEqual([
+      `place: skipped ${QWEN35}: it is cold, and a load 25.0 GB beside 40.0 GB resident in 48 GB does not fit, and nothing may be evicted while pinned ${QWEN27} is resident`,
+    ]);
+    expect(target_ref(decision)).toBe('claude/sonnet@low');
+    expect(decision.placement).toEqual({ resident: false, cold_load: false, waited_ms: 0, degraded_from: QWEN27 });
+  });
+
+  test('allow still takes the profile order, and never still loads nothing', () => {
+    const allow = with_cold_load('allow', HOUSE);
+    const ranked = on_house('code-light', ['qwen3.6:35b-mlx'], { config: allow });
+    expect(target_ref(ranked)).toBe(QWEN27);
+    expect(ranked.placement).toEqual({ resident: false, cold_load: true, waited_ms: 0 });
+    const never = on_house('chat', [], { config: with_cold_load('never', HOUSE) });
+    expect(skipped(never)).toEqual([
+      `place: skipped ${QWEN35}: it is cold, and cold_load is never`,
+      `place: skipped ${QWEN27}: it is cold, and cold_load is never`,
+    ]);
+    expect(target_ref(never)).toBe('claude/sonnet@low');
   });
 });
 
