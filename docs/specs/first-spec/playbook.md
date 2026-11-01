@@ -225,36 +225,45 @@ Note the tag names: searle has `qwen3.8:27b-mlx`, this laptop has `qwen3.8:27b`.
 
 ## 5. Wire Zed
 
-**Native agent (Stage A).** Add to `~/.config/zed/settings.json` under `language_models`:
+**Native agent (Stage A).** Merge [`deploy/zed.settings.example.json`](../../../deploy/zed.settings.example.json) into `~/.config/zed/settings.json`. It is this block, and a test holds the two equal:
 
 ```json
-"openai_compatible": {
-  "penfield": {
-    "api_url": "http://penfield.lab.robmclarty.com:7777/v1",
-    "available_models": [
-      { "name": "auto",         "display_name": "Penfield · auto",    "max_tokens": 65536, "reasoning_effort": "medium",
-        "capabilities": { "tools": true, "images": false, "parallel_tool_calls": false, "prompt_cache_key": false, "chat_completions": true, "interleaved_reasoning": false, "max_tokens_parameter": false } },
-      { "name": "auto/fast",    "display_name": "Penfield · fast",    "max_tokens": 65536 },
-      { "name": "auto/private", "display_name": "Penfield · private", "max_tokens": 65536 },
-      { "name": "auto/best",    "display_name": "Penfield · best",    "max_tokens": 65536 },
-      { "name": "qwen3.8:27b-mlx", "display_name": "searle · qwen3.8 27b", "max_tokens": 65536, "reasoning_effort": "medium" },
-      { "name": "qwen3.6:35b-mlx", "display_name": "searle · qwen3.6 35b", "max_tokens": 65536 }
-    ]
+{
+  "language_models": {
+    "openai_compatible": {
+      "penfield": {
+        "api_url": "http://penfield.lab.robmclarty.com:7777/v1",
+        "available_models": [
+          {
+            "name": "auto",
+            "display_name": "Penfield · auto",
+            "max_tokens": 65536,
+            "reasoning_effort": "medium",
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true,
+              "interleaved_reasoning": false,
+              "max_tokens_parameter": false
+            }
+          },
+          { "name": "auto/fast", "display_name": "Penfield · fast", "max_tokens": 65536 },
+          { "name": "auto/private", "display_name": "Penfield · private", "max_tokens": 65536 },
+          { "name": "auto/best", "display_name": "Penfield · best", "max_tokens": 65536 },
+          { "name": "qwen3.8:27b-mlx", "display_name": "searle · qwen3.8 27b", "max_tokens": 65536, "reasoning_effort": "medium" },
+          { "name": "qwen3.6:35b-mlx", "display_name": "searle · qwen3.6 35b", "max_tokens": 65536 }
+        ]
+      }
+    }
   }
 }
 ```
 
-The key: Zed reads it from `PENFIELD_API_KEY` (provider id upper-snake plus `_API_KEY`) or from Settings → AI → LLM Providers, which stores it in the keychain. Use the `zed-native` token. Then set a default, for example in a profile:
+Each `name` is a model `/v1/models` lists for the `zed-native` caller; Zed's picker shows only what this list names, so a tag added to searle needs a line here too. Zed sends every request with `stream: true` and `stream_options.include_usage`, so its streams log `upstream_prompt_tokens`, the sample Q4 reads. Until the plato install (§3), point `api_url` at the laptop's gateway, `http://127.0.0.1:7777/v1`.
 
-```json
-"agent": {
-  "profiles": {
-    "penfield": { "name": "Penfield", "default_model": { "provider": "openai_compatible/penfield", "model": "auto" } }
-  }
-}
-```
-
-(Confirm the provider key format in Zed's docs when you add it; `zed: open default settings` shows the current shape.) Switch models with `cmd-alt-/`; `auto` and the aliases sit beside the concrete tags.
+The key: Zed reads it from `PENFIELD_API_KEY` (the provider id in upper snake case plus `_API_KEY`) or from Settings → AI → LLM Providers, which stores it in the keychain. Use the `zed-native` token, never in `settings.json`. Pick `Penfield · auto` once in the Agent Panel's model selector, which saves it as `agent.default_model`, and switch models there with `cmd-alt-/`: `auto` and the aliases sit beside the concrete tags. When `auto` decides Claude, `zed-native`'s `claude: hint` answers with one message naming the model and effort (§10); Q5 reads two weeks of these from the log.
 
 **The penfield ACP agent (Stage B).** Under `agent_servers`:
 

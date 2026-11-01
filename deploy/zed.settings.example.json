@@ -1,0 +1,31 @@
+{
+  "language_models": {
+    "openai_compatible": {
+      "penfield": {
+        "api_url": "http://penfield.lab.robmclarty.com:7777/v1",
+        "available_models": [
+          {
+            "name": "auto",
+            "display_name": "Penfield · auto",
+            "max_tokens": 65536,
+            "reasoning_effort": "medium",
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true,
+              "interleaved_reasoning": false,
+              "max_tokens_parameter": false
+            }
+          },
+          { "name": "auto/fast", "display_name": "Penfield · fast", "max_tokens": 65536 },
+          { "name": "auto/private", "display_name": "Penfield · private", "max_tokens": 65536 },
+          { "name": "auto/best", "display_name": "Penfield · best", "max_tokens": 65536 },
+          { "name": "qwen3.8:27b-mlx", "display_name": "searle · qwen3.8 27b", "max_tokens": 65536, "reasoning_effort": "medium" },
+          { "name": "qwen3.6:35b-mlx", "display_name": "searle · qwen3.6 35b", "max_tokens": 65536 }
+        ]
+      }
+    }
+  }
+}

@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 14 — feat(wire): chat completions and embeddings end to end (spec step 15)
+**Current step:** 15 — feat(wire): Zed's native agent on the gateway (spec step 16)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -36,7 +36,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
 - ☑ 12. feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
 - ☑ 13. feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
-- ☐ 14. feat(wire): chat completions and embeddings end to end (spec step 15)
+- ☑ 14. feat(wire): chat completions and embeddings end to end (spec step 15)
 - ☐ 15. feat(wire): Zed's native agent on the gateway (spec step 16)
 - ☐ 16. feat(ui): GET /leases and the status page (spec step 17)
 - ☐ 17. feat(deploy): Dockerfile, compose, systemd unit and the office config (spec step 18)
@@ -659,3 +659,5 @@ folder, so it rides the branch into the PR.)*
   **5.** Outside the seam: two error kinds and three barrel lines
 
   `wire/errors.ts` gained `bad_gateway` (502) and `gateway_timeout` (504) and exports `error_body`, so the error event inside a stream uses the same envelope as every other error. `log/index.ts` exports `log_outcome`, and `place/index.ts` exports the `Lease` and `Outcome` types the proxy names. Building also turned up four tangents, now P22 to P25: stalls are not yet counted into the node's breaker (spec §6), no node key is sent to an OpenAI-compatible node, usage is read only from event streams, and re-serializing the body can respell a number.
+
+- 2026-11-01 — step 14 checkpointed · 4b0b9ffde — feat(wire): chat completions and embeddings end to end (spec step 15) (1 drift, <1m)
