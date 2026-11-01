@@ -5,7 +5,7 @@ import type { Catalogue, CatalogueModel } from '../catalogue/index.js';
 // slots its leases hold now, and the candidate warnings. Unfiltered: it is the
 // operator's view, behind a caller token like every endpoint but /healthz (C5).
 
-// Leases held per model ref; empty until the lease table arrives (plan step 10).
+// Active leases per model ref, from the lease table.
 export type InUse = Readonly<Record<string, number>>;
 
 type CatalogueBody = Omit<Catalogue, 'models'> & { models: (CatalogueModel & { slots_in_use: number })[] };

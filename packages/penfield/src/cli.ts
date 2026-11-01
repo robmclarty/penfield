@@ -7,6 +7,8 @@ import { system_clock } from './clock.js';
 import { check_config, format_issues, parse_listen, read_config } from './config/index.js';
 import type { Config, Listen } from './config/index.js';
 import { log_incident, open_db } from './log/index.js';
+import type { Incident } from './log/index.js';
+import { create_leases, create_reaper, sweep_orphans } from './place/index.js';
 import { create_prober } from './probe/index.js';
 import { check_bind, create_server, read_tokens, start_server } from './wire/index.js';
 
@@ -97,6 +99,14 @@ const banner = ({ file, config, tokens }: Resolved, address: string, instance_id
     '',
   ].join('\n');
 
+// The reaper runs with the most frequent probe (spec §6), and at least every ten
+// seconds.
+const reap_every = (config: Config): number =>
+  Math.min(
+    10_000,
+    ...Object.values(config.nodes).flatMap((entry) => ('probe' in entry ? [entry.probe.every_ms] : [])),
+  );
+
 const stopped = (signal: AbortSignal | undefined): Promise<void> =>
   new Promise((done) => {
     if (signal?.aborted === true) done();
@@ -129,24 +139,31 @@ const run_serve = async (args: string[], ctx: CliContext): Promise<number> => {
   }
   const { config, listen, tokens } = resolved;
   const db = open_db(config.server.state_dir);
+  const incident = (each: Incident): void => void log_incident(db, each);
   const catalogue = create_catalogue(config);
   const prober = create_prober({
     config,
     env: ctx.env,
     catalogue,
     clock: system_clock,
-    incident: (incident) => void log_incident(db, incident),
+    incident,
     on_error: (error) => void ctx.err.write(`penfield: probe: ${error instanceof Error ? error.message : String(error)}\n`),
   });
-  // No leases until plan step 10, so nothing is in use.
-  const app = create_server({ config, tokens, snapshot: catalogue.snapshot, in_use: () => ({}) });
+  const leases = create_leases({ db, clock: system_clock });
+  const reaping = { leases, clock: system_clock, instance_id: db.instance_id, incident };
+  // The last boot's leases died with it (spec §6).
+  sweep_orphans(reaping);
+  const reaper = create_reaper({ ...reaping, every_ms: reap_every(config) });
+  const app = create_server({ config, tokens, snapshot: catalogue.snapshot, in_use: leases.in_use });
   try {
     const address = await start_server(app, listen);
     ctx.out.write(banner(resolved, address, db.instance_id));
     prober.start();
+    reaper.start();
     await stopped(ctx.signal);
     return 0;
   } finally {
+    reaper.stop();
     prober.stop();
     await app.close();
     db.close();

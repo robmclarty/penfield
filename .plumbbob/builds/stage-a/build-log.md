@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 9 — feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
+**Current step:** 10 — feat(place): leases and placement (spec step 11)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -31,7 +31,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 6. feat(probe): liveness, readiness, breaker and incidents (spec step 7)
 - ☑ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
 - ☑ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
-- ☐ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
+- ☑ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
 - ☐ 10. feat(place): leases and placement (spec step 11)
 - ☐ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
 - ☐ 12. feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
@@ -60,11 +60,14 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [x] step 10's cold_load check should be memory-aware: a cold load goes ahead only when the model fits in the node's memory_gb beside its pinned and leased resident models (weights from discovery's size_bytes plus a KV allowance), else degrade or wait by the busy policy
 - [x] the readiness ping sends /api/generate to every resident model, and an embedding model answers 400 'does not support generate', which the prober treats as a hang: unload_on_hang unloaded nomic-embed-text on searle and opened its breaker; readiness should count only a timeout as not ready, and ping an embedding model through /api/embed or not at all
 - [x] the house file's classify and extract candidate qwen3:4b-instruct-2507 matches no tag on searle, which has qwen3:4b-instruct-2507-q4_K_M, so the gateway logs candidate_missing for both at every boot; rename it in deploy/penfield.example.yaml
-- [ ] a model whose readiness ping answers 4xx keeps the breaker it had (D45 counts it as nothing), so a model breaker opened by an earlier hang or 5xx stays open while every half-open ping answers 400; a 4xx in half-open might count as a success
-- [ ] the spec's §5.1 example and playbook §4's house config still name qwen3:4b-instruct-2507; step 19's playbook pass should carry searle's real tag qwen3:4b-instruct-2507-q4_K_M, and config/defaults.ts still says ready_prompt is off until Q2 is measured
-- [ ] OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form
-- [ ] the house file has no vision rule or profile, so an image routes to chat's first candidate, qwen3.6:35b-mlx, whether or not it reads images; a rule on attachments: images and a vision-capable candidate list would keep a picture off a text-only model
-- [ ] a system_matches pattern that does not compile is caught only when a request reaches its rule (refused then); compiling each pattern at load, (?i) included, would make it a D41 static check with a line
+- [x] a model whose readiness ping answers 4xx keeps the breaker it had (D45 counts it as nothing), so a model breaker opened by an earlier hang or 5xx stays open while every half-open ping answers 400; a 4xx in half-open might count as a success
+- [x] the spec's §5.1 example and playbook §4's house config still name qwen3:4b-instruct-2507; step 19's playbook pass should carry searle's real tag qwen3:4b-instruct-2507-q4_K_M, and config/defaults.ts still says ready_prompt is off until Q2 is measured
+- [x] OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form
+- [x] the house file has no vision rule or profile, so an image routes to chat's first candidate, qwen3.6:35b-mlx, whether or not it reads images; a rule on attachments: images and a vision-capable candidate list would keep a picture off a text-only model
+- [x] a system_matches pattern that does not compile is caught only when a request reaches its rule (refused then); compiling each pattern at load, (?i) included, would make it a D41 static check with a line
+- [ ] Ollama's eviction is not pin-aware and OLLAMA_MAX_LOADED_MODELS caps residency by count: a cold load that fits beside the pinned model by memory_gb can still make Ollama unload the pinned 27B when the count cap is hit or it picks the pinned one as least recent; a per-node max_loaded in placement, or keep_alive -1 on pinned models, would close it
+- [ ] searle's memory_gb is 48, but Metal's default GPU working-set limit on Apple Silicon sits below the full unified memory, so D44's fit may admit a load Ollama then splits to CPU or evicts for; set memory_gb to what Ollama reports usable, and check KV_ALLOWANCE (0.25) against /api/ps sizes on searle
+- [ ] the reaper and the proxy's own deadline timer both release at deadline_at, so a reaper tick landing first records the lease as orphaned rather than deadline; step 13 should give the reaper a grace past deadline_at, or log the outcome from the proxy whatever release returns
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -94,6 +97,12 @@ Harvest results this boundary:
 - **blocker**: park 8 · step 10's cold_load check should be memory-aware: a cold load goes ahead only when the model fits in the node's memory_gb beside its pinned and leased resident models (weights from discovery's size_bytes plus a KV allowance), else degrade or wait by the busy policy → step 10's done-when refuses a cold load that would evict a pinned model, and only a fit against `memory_gb` can tell when one would
 - **blocker**: park 9 · the readiness ping sends /api/generate to every resident model, and an embedding model answers 400 'does not support generate', which the prober treats as a hang: unload_on_hang unloaded nomic-embed-text on searle and opened its breaker; readiness should count only a timeout as not ready, and ping an embedding model through /api/embed or not at all → with `ready_prompt` on, the gateway unloads searle's embedding model whenever a readiness tick finds it resident, so it becomes a fix step at the head of range 3
 - **blocker**: park 10 · the house file's classify and extract candidate qwen3:4b-instruct-2507 matches no tag on searle, which has qwen3:4b-instruct-2507-q4_K_M, so the gateway logs candidate_missing for both at every boot; rename it in deploy/penfield.example.yaml → a one-line rename in the house file, riding P9's fix step
+- 2026-11-01, at range 3 of 8's stop: 5 parked ideas, classified.
+- **tangent**: park 11 · a model whose readiness ping answers 4xx keeps the breaker it had (D45 counts it as nothing), so a model breaker opened by an earlier hang or 5xx stays open while every half-open ping answers 400; a 4xx in half-open might count as a success → an embedding model's breaker opens only after a hang or 5xx, which its 400 from Ollama's capability check makes unlikely
+- **tangent**: park 12 · the spec's §5.1 example and playbook §4's house config still name qwen3:4b-instruct-2507; step 19's playbook pass should carry searle's real tag qwen3:4b-instruct-2507-q4_K_M, and config/defaults.ts still says ready_prompt is off until Q2 is measured → step 19 rewrites the playbook as shipped from the house file, which now carries the tag, and the spec is a settled source
+- **tangent**: park 13 · OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form → no client sends metadata.penfield yet, and every hint has a header today
+- **tangent**: park 14 · the house file has no vision rule or profile, so an image routes to chat's first candidate, qwen3.6:35b-mlx, whether or not it reads images; a rule on attachments: images and a vision-capable candidate list would keep a picture off a text-only model → rules already match `attachments: images`, so a vision rule is a config edit you can make at any time
+- **tangent**: park 15 · a system_matches pattern that does not compile is caught only when a request reaches its rule (refused then); compiling each pattern at load, (?i) included, would make it a D41 static check with a line → the ladder already refuses a broken pattern with its reason, so a load check only moves the error earlier
 
 ## Log
 
@@ -304,3 +313,79 @@ folder, so it rides the branch into the PR.)*
 
 - 2026-11-01 — step 20 checkpointed · 65884f1f5 — fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run) (1 drift, 3m)
 - 2026-11-01 — step 8 checkpointed · 1830c5c44 — feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9) (5m)
+- 2026-11-01 — step 9 checkpointed · bac88e15d — feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10) (1 drift, 8m)
+- 2026-11-01 — range 3 of 8's stop recorded — read the twenty-request routing table in `route/__tests__/ladder.test.ts` as the Stage A routing policy before placement and `/route` build on it; the leases pause that follows is why this span ends here
+
+  **Summary**: Range 3 fixed the readiness bug from range 2's live run and built routing. A 4xx no longer unloads a model, and the house file names searle's real qwen3 4b tag. Then came the RouteInput parser for OpenAI chat and embeddings bodies, and the ladder (explicit, alias, shape, rule, default), with a twenty-request table over the house file as Stage A's routing policy. All three steps landed green; two strayed from their seams.
+
+  1. Two checkpoints reached past their seams, both on purpose
+  2. The table reads as the house policy, and four rows deserve a look
+  3. A profile nobody defines is refused wherever it is named
+  4. RouteInput makes four small calls the spec left open
+  5. Readiness now acts on how a ping failed, per D45
+
+  **Readout**:
+
+  ```text
+  steps        3 of 3 landed
+               - 20 65884f1 · 8 1830c5c · 9 bac88e1
+  check        green: 9 of 9 checks, 3 landings
+  done-when    met
+  decisions    honored:
+               - D45 (readiness-acts-on-a-hang)
+               - D6 (explicit-wins), D7 (cheapest-rung-first)
+               - D35 (shape-is-the-endpoint)
+  constraints  17 of 17 honored
+  seam         strayed: 4 paths outside 2 steps' seams
+               - step 20: 3 paths
+               - step 9: packages/penfield/src/route/types.ts
+  diff         +1412 -12 across 26 files
+               - deploy/penfield.example.yaml +2 -2
+               - packages/penfield/src/probe/__tests__/prober.test.ts +40 -0
+               - packages/penfield/src/probe/prober.ts +5 -1
+               - packages/penfield/src/probe/readiness.ts +15 -5
+               - packages/penfield/src/route/__tests__/input.test.ts +216 -0
+               - packages/penfield/src/route/__tests__/ladder.test.ts +338 -0
+               - packages/penfield/src/route/index.ts +5 -1
+               - and 19 more
+  spent        17 min · green first run at every landing · 2 drift warnings
+  ```
+
+  **Verdict**: ◐ A hair off (seam strayed)
+
+  **Harvested**: **5** of 15 parked ideas open
+
+  | Park | What it is | Why it matters | Lean |
+  | --- | --- | --- | --- |
+  | P11 · 4xx in half-open | a model whose readiness ping answers 4xx keeps the breaker it had (D45 counts it as nothing), so a model breaker opened by an earlier hang or 5xx stays open while every half-open ping answers 400; a 4xx in half-open might count as a success | a model breaker stuck open would make its profile unplaceable once step 10 reads breakers | tangent: an embedding model's breaker opens only after a hang or 5xx, which its 400 from Ollama's capability check makes unlikely |
+  | P12 · stale qwen3 tag in docs | the spec's §5.1 example and playbook §4's house config still name qwen3:4b-instruct-2507; step 19's playbook pass should carry searle's real tag qwen3:4b-instruct-2507-q4_K_M, and config/defaults.ts still says ready_prompt is off until Q2 is measured | a reader copying playbook §4 would get candidate_missing on searle | tangent: step 19 rewrites the playbook as shipped from the house file, which now carries the tag, and the spec is a settled source |
+  | P13 · string-only OpenAI metadata | OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form | a typed SDK client could not send hints in the body at all | tangent: no client sends metadata.penfield yet, and every hint has a header today |
+  | P14 · no vision route | the house file has no vision rule or profile, so an image routes to chat's first candidate, qwen3.6:35b-mlx, whether or not it reads images; a rule on attachments: images and a vision-capable candidate list would keep a picture off a text-only model | a picture lands on a text-only model and gets a confident wrong answer | tangent: rules already match `attachments: images`, so a vision rule is a config edit you can make at any time |
+  | P15 · compile patterns at load | a system_matches pattern that does not compile is caught only when a request reaches its rule (refused then); compiling each pattern at load, (?i) included, would make it a D41 static check with a line | a typo in system_matches would refuse requests at runtime instead of failing the boot with a line | tangent: the ladder already refuses a broken pattern with its reason, so a load check only moves the error earlier |
+
+  **Recommendation**: Read the table at `packages/penfield/src/route/__tests__/ladder.test.ts:93-120` and confirm it as Stage A's routing policy, with all five parks as tangents. The table matches the house file as written, so a row you would change is a rule or profile edit, which is cheaper now than after placement and `/route` build on it; the image row (P14) is the likeliest one.
+
+  **1.** Two checkpoints reached past their seams, both on purpose
+
+  Step 20's checkpoint swept in the three Ollama captures range 2 left untracked in `packages/penfield/test/fixtures/ollama/` (a streamed chat, a reasoning stream excerpt, an embeddings response). They are meant for plan step 13, and the range 2 record said they would ride the next checkpoint, so they are in `65884f1` rather than in step 13's diff. Step 9 added the ladder's types (`Rung`, `Answer`, `RungResult`, `ModelRung`, `RoutedProfile`) to `route/types.ts`, beside `RouteInput`. That file is step 8's, not in step 9's seam. Putting the types in `ladder.ts` would have made the rungs import from the ladder that imports them, a cycle fallow would flag. Neither stray changes behaviour.
+
+  **2.** The table reads as the house policy, and four rows deserve a look
+
+  The table is at `packages/penfield/src/route/__tests__/ladder.test.ts:93-120`, one row per request, each rendered as `profile · rung · confidence`. On the house file, rule 8 (`chat: true`) answers every chat request at 1.0, so the `default` rung never fires there; it is tested on a file without that rule. The rows worth reading twice:
+
+  - An image routes to `chat`, so to `qwen3.6:35b-mlx`, because the house has no vision rule (P14).
+  - Rule order is policy: a profile hint outranks tools, and tools outrank length (a 30 k-token agent turn is `code-heavy`, not `summarize`).
+  - `tokens_gt` is strictly over: an agent turn at exactly 12000 tokens is `code-light`.
+  - A profile's own name (`summarize`) routes there at the `alias` rung, past every rule, even with tools.
+
+  **3.** A profile nobody defines is refused wherever it is named
+
+  This is P2's call, made here: the rule rung, the `$hint` rule, the shape rung (`audio_transcriptions` wants `stt`, which the house lacks) and the default all go through one check. A profile `profiles:` lacks is a refused result naming it, never a fall-through to the next rule. A `system_matches` that does not compile refuses the request that reaches it, so a broken rule cannot reroute traffic without saying so (P15 would move that error to load). P3's `(?i)` is handled as any leading `(?ims)` group becoming the RegExp's flags. A model that is no alias, profile or catalogue model is refused at `explicit`, naming any node that is down, since it may hold the model. `route` returns a Promise, because the Stage C rungs it takes as functions call a model; Stage A passes none.
+
+  **4.** RouteInput makes four small calls the spec left open
+
+  An `x-penfield-*` header wins over `metadata.penfield`: the header is set by whatever sends the request to penfield, which may sit above the tool that wrote the body. "4 k" and "1 k" are 4096 and 1024, the way the house counts 64 k as 65536. A hint that cannot be read (`x-penfield-max-privacy: public`) refuses the request rather than being dropped, since dropping a stricter privacy would route above what the sender asked (C11 (fail-closed)). Attachments are read from user messages only, images over code over docs, and code is a fenced block or a file part with a code extension. An assistant's code in the history is not an attachment.
+
+  **5.** Readiness now acts on how a ping failed, per D45
+
+  The readiness call reports `hang`, `server`, `client` or `unreachable`. A 4xx is the runner answering (an embedding model refusing `generate`) and counts as nothing; a 5xx or a refused connection counts toward the model's breaker without an unload; only a hang takes `unload_on_hang`. The fake Ollama gained an embedding model that answers 400 and a crashed runner that answers 500. Counting a 4xx as nothing has one corner, P11: a model breaker opened earlier by a hang stays open while every half-open ping answers 400.

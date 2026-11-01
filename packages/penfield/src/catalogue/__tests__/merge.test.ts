@@ -126,6 +126,7 @@ describe('nodes and their models', () => {
       url: null,
       formats: [],
       efforts: ['low', 'high'],
+      memory_gb: null,
       enabled: true,
       state: 'up',
       reason: null,

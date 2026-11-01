@@ -43,6 +43,9 @@ export type CatalogueNode = {
   formats: Format[];
   // What a decision node offers; empty elsewhere.
   efforts: Effort[];
+  // The memory its models may use, for placement's cold-load fit (D44); null when
+  // the file leaves it out.
+  memory_gb: number | null;
   enabled: boolean;
   // `unknown` until the first discovery; a decision node is never contacted, so it is up.
   state: 'up' | 'down' | 'unknown';
@@ -168,6 +171,7 @@ const to_node = (name: string, entry: NodeConfig, seen: Seen | undefined, breake
   url: entry.kind === 'ollama' || entry.kind === 'openai_compatible' ? entry.url : null,
   formats: entry.kind === 'claude_decision' ? [] : [...entry.formats],
   efforts: entry.kind === 'claude_decision' ? [...entry.efforts] : [],
+  memory_gb: entry.kind === 'ollama' || entry.kind === 'openai_compatible' ? (entry.memory_gb ?? null) : null,
   enabled: entry.kind === 'anthropic_api' ? entry.enabled : true,
   ...state_of(entry, seen),
   breaker: breakers.nodes[name] ?? 'closed',
