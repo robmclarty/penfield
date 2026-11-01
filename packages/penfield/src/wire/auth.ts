@@ -69,8 +69,3 @@ export const authenticate = (
   const policy = name === undefined ? undefined : callers[name];
   return name === undefined || policy === undefined ? undefined : { ...policy, name };
 };
-
-// The OpenAI error shape; plan step 11 grows it into the envelope every error uses.
-export const unauthorized = (message: string) => ({
-  error: { message, type: 'invalid_request_error', code: 'invalid_api_key' },
-});

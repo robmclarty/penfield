@@ -1,15 +1,13 @@
-import { names_model } from '../catalogue/index.js';
-import type { Catalogue, CatalogueModel } from '../catalogue/index.js';
-import type { Config, Privacy } from '../config/index.js';
+import type { Catalogue } from '../catalogue/index.js';
+import type { Config } from '../config/index.js';
 import type { Caller } from './auth.js';
+import { bar_of } from './policy.js';
 
 // GET /v1/models (spec §5.4): `auto` and the other aliases, the profile names, then
 // the catalogue's models this caller may reach, in OpenAI's list shape. A model is
 // listed by its tag, as a client sends it, and a decision node's as `node/model`
 // (`claude/opus`); a tag two nodes share is listed as `node/tag` on both. Each
 // entry carries a `penfield` object saying what it is.
-
-const RANK: Record<Privacy, number> = { local: 0, lan: 1, cloud: 2 };
 
 type Alias = Config['aliases'][string];
 
@@ -38,16 +36,12 @@ const entry = (id: string, owned_by: string, penfield: Penfield): Entry => ({
   penfield,
 });
 
-// Over the caller's max_privacy (D10), or outside its `models:` list (D38), is not listed.
-const reachable = (model: CatalogueModel, privacy: Privacy, caller: Caller): boolean =>
-  RANK[privacy] <= RANK[caller.max_privacy] &&
-  (caller.models === undefined || caller.models.some((wanted) => names_model(wanted, model)));
-
 const model_entries = (catalogue: Catalogue, caller: Caller): Entry[] => {
   const nodes = new Map(catalogue.nodes.map((node) => [node.name, node]));
   const visible = catalogue.models.flatMap((model) => {
     const node = nodes.get(model.node);
-    return node?.enabled === true && reachable(model, node.privacy, caller) ? [{ model, decision: node.kind === 'claude_decision' }] : [];
+    // Over the caller's max_privacy (D10), or outside its `models:` list (D38), is not listed.
+    return node?.enabled === true && bar_of(model, node, caller) === null ? [{ model, decision: node.kind === 'claude_decision' }] : [];
   });
   const tags = new Map<string, number>();
   for (const { model, decision } of visible) if (!decision) tags.set(model.id, (tags.get(model.id) ?? 0) + 1);

@@ -65,11 +65,14 @@ describe('a caller token (C5, D21)', () => {
   test.each(['/v1/models', '/catalogue', '/nowhere'])('none is a 401 on %s', async (path) => {
     const response = await get(path);
     expect(response.status).toBe(401);
+    // The error envelope (plan step 11), its request_id the response's own.
     expect(await response.json()).toEqual({
       error: {
         message: 'penfield needs a caller token: send Authorization: Bearer <token>',
         type: 'invalid_request_error',
+        param: null,
         code: 'invalid_api_key',
+        request_id: response.headers.get('x-penfield-request'),
       },
     });
   });

@@ -5,10 +5,12 @@ import type { Catalogue } from '../catalogue/index.js';
 import type { Config, Listen } from '../config/index.js';
 import { catalogue_body } from '../ui/index.js';
 import type { InUse } from '../ui/index.js';
-import { authenticate, unauthorized } from './auth.js';
+import { authenticate } from './auth.js';
 import type { Caller, Tokens } from './auth.js';
+import { install_error_handlers, send_error } from './errors.js';
 import { healthz_body, node_health } from './healthz.js';
 import { models_list } from './openai.js';
+import { mint_request_id, stamp_request_id } from './request_id.js';
 
 // The HTTP server. It binds what `serve` resolved and holds the routes; each route
 // gets what it reads as an argument, never from a module-level singleton (C6).
@@ -33,9 +35,11 @@ export type ServerDeps = {
 };
 
 export const create_server = (deps: ServerDeps): FastifyInstance => {
-  const app = fastify({ logger: false });
+  const app = fastify({ logger: false, genReqId: mint_request_id });
   const callers = new WeakMap<FastifyRequest, Caller>();
+  install_error_handlers(app);
 
+  app.addHook('onRequest', stamp_request_id);
   app.addHook('onRequest', async (request, reply) => {
     if (PUBLIC.has(request.routeOptions.url ?? '')) return;
     const header = request.headers.authorization;
@@ -48,7 +52,7 @@ export const create_server = (deps: ServerDeps): FastifyInstance => {
       header === undefined
         ? 'penfield needs a caller token: send Authorization: Bearer <token>'
         : 'penfield does not know that token';
-    await reply.code(401).send(unauthorized(message));
+    await send_error(reply, 'unauthorized', message);
   });
 
   // Every route but the public ones runs after the hook has found its caller.
