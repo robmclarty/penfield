@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 13 — feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
+**Current step:** 14 — feat(wire): chat completions and embeddings end to end (spec step 15)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -35,7 +35,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 10. feat(place): leases and placement (spec step 11)
 - ☑ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
 - ☑ 12. feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
-- ☐ 13. feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
+- ☑ 13. feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
 - ☐ 14. feat(wire): chat completions and embeddings end to end (spec step 15)
 - ☐ 15. feat(wire): Zed's native agent on the gateway (spec step 16)
 - ☐ 16. feat(ui): GET /leases and the status page (spec step 17)
@@ -77,6 +77,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [ ] the proxy sends no node key: an openai_compatible node with api_key_env (openrouter) would answer 401; plan step 14 or Stage D should pass the key the catalogue resolves from env, as discovery does
 - [ ] upstream_prompt_tokens is read only from an event stream's last usage chunk; a stream: false chat and every /v1/embeddings answer carry usage in their JSON body and log null, which thins Q4's sample
 - [ ] the forwarded body is the parsed body re-serialized with model swapped, so a number's spelling can change (1.0 goes up as 1, an integer past 2^53 loses digits); rewriting model in the raw bytes would hold C1 to the byte
+- [ ] Fastify's default bodyLimit is 1 MiB, so a chat body past it (an image as base64, a long Zed thread with files) gets a 413 before routing; create_server could set bodyLimit, or server: could carry one
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -598,3 +599,63 @@ folder, so it rides the branch into the PR.)*
   **4.** The route e2e boots a second gateway over an idle searle, because the probe runs every 10 s
 
   The house file probes searle every 10 s on a real clock. Changing the fake's residency mid-run would need a 10 s wait. Instead, the e2e's boot and shutdown became two helpers, and a second describe block boots its own gateway over a fake with nothing resident. It decides the 35B cold load and checks that the fake still has nothing loaded, since a dry decision loads nothing. The first gateway's tests are unchanged apart from the alternatives' order.
+
+- 2026-11-01 — step 13 checkpointed · 6e5e7266e — feat(wire): the streaming proxy with stall, deadline and abort (spec step 14) (1 drift, 511m)
+
+  **Summary**: `proxy()` now forwards a claimed decision to its node and pipes the answer back as the client reads it. Only `model` is rewritten in the body, and no inbound `Authorization` or `x-penfield-*` header goes upstream. Every forward ends through one `finish`, which releases the lease once and writes `outcome`, `first_byte_ms`, `total_ms`, `bytes_out`, `upstream_status` and `upstream_prompt_tokens` on the decision's row. A client leaving, a stall or the deadline cuts the forward short, and only a stall before the first byte is retried, once, on the next candidate on a node. The reaper now waits 30 s past `deadline_at` (D47). Sixteen integration tests against the fake Ollama prove each path, and after every test they check that each lease was released exactly once. Nothing calls the proxy yet; step 14 wires it to the endpoints.
+
+  1. The pipe holds memory flat: 2 MB of growth over a 61 MB stream, and 56 MB when a test version keeps the chunks
+  2. Every path ends through one `finish`, and the tests count releases per lease
+  3. The retry is a decision of its own, and a cold candidate gets the longer first-byte window
+  4. Four readings the done-when left open
+  5. Outside the seam: two error kinds and three barrel lines
+
+  **Readout**:
+
+  ```text
+  check        green: 9 of 9 checks
+  done-when    met
+  decisions    honored:
+               - D2 (proxy-not-translate), D4 (no-engine-hot-path)
+               - D9 (decision-carries-alternatives), D13 (leases), D15 (busy-policy)
+               - D16 (hung-work-recovered), D34 (timers-injectable), D47 (reaper-grace)
+  constraints  17 of 17 honored
+  seam         strayed: 3 paths outside the seam
+               - packages/penfield/src/log/index.ts
+               - packages/penfield/src/place/index.ts
+               - packages/penfield/src/wire/errors.ts
+  diff         +1317 -22 across 13 files
+               - packages/penfield/src/log/decisions.ts +24 -1
+               - packages/penfield/src/log/index.ts +2 -2
+               - packages/penfield/src/place/__tests__/leases.test.ts +24 -7
+               - packages/penfield/src/place/index.ts +1 -1
+               - packages/penfield/src/place/leases.ts +7 -0
+               - packages/penfield/src/place/reaper.ts +11 -6
+               - packages/penfield/src/wire/__tests__/sse.test.ts +71 -0
+               - and 6 more
+  spent        8h 31m · 1 turn · 5s gate · green first run
+  ```
+
+  **Verdict**: ◐ A hair off (seam strayed)
+
+  **Recommendation**: Approve the piping, the abort paths and the single release as built, after reading the two calls of mine in sections 3 and 4. Each is a line or two to change: the cold first-byte window taking the larger of the two values, and no incident for a deadline or a client leaving. The flat-heap result with its failing check, plus the release counter on every test, are the evidence this pause asked for. P22 (stalls into the breaker) is the park I would schedule soonest: without it, a node that stalls every request stays placeable until the prober notices.
+
+  **1.** The pipe holds memory flat: 2 MB of growth over a 61 MB stream, and 56 MB when a test version keeps the chunks
+
+  The node's body goes to Fastify as a `Readable.from` over an async generator, and Fastify pipes it, so a chunk is read from the node only when the client has taken the one before. The stall window runs only while the proxy waits on the node, from each read to the chunk that answers it, so a client that is slow to read never counts as the node stalling. In the 50 k-chunk test, about 1 KB per chunk, the client had its first chunk when the fake had sent about 1,400 of the 50,000. Measured after two full collections, the heap plus the buffers it points to grew about 2 MB at every 10 MB sample. One collection alone overstated it at 14 to 20 MB, because V8 frees a dead buffer's memory only on the next collection. As a check, I patched the proxy to keep every chunk: the test then read 56 MB and failed, so the 32 MB bound would catch a proxy that buffers. The fake Ollama now waits for its socket to drain before it writes again, so it never buffers a stream either.
+
+  **2.** Every path ends through one `finish`, and the tests count releases per lease
+
+  Each forward to a node is a leg with its own `AbortController`, deadline timer and a guarded `finish`, which releases the lease, writes a `stall` incident for a stall, and writes the outcome. A client that leaves is seen on `reply.raw`'s `close` before the response has finished. In one measured run, the fake saw its upstream socket close 10 ms after the client aborted mid-stream, and 2 ms after it aborted before the first byte, against the test's bound of 100 ms. Three things hold the release to once. The generator's `finally` calls `finish`, the body stream's `close` covers a client that left before the generator started, and the deadline timer calls `finish` itself, so a client that stops reading cannot hold the lease past `deadline_at`. The tests wrap `release` with a counter, and after every test they require that no lease is active and that each was released exactly once. Reading the code back turned up one leak, now fixed: a retry that won a slot just as the client left would have hung up while still holding that slot's lease. It now hands the lease to the leg, which releases it as `client_gone`.
+
+  **3.** The retry is a decision of its own, and a cold candidate gets the longer first-byte window
+
+  On a stall before the first byte, the proxy takes the first alternative that is on a node, skipping the `claude/*` decisions, and makes it a new decision. That decision has a new id, the same request id, `degraded_from` naming the stalled model, and a closing reason line naming the stall. It is claimed through the busy policy the way the first was, and it is logged whether or not it gets a slot. The first row keeps its own `stalled` outcome, so the log stays append-only, and the client's `x-penfield-decision` names the retry. When there is no alternative on a node, or the retry is refused because the next model is busy or the client left while it waited, the answer is a 504 naming why. A stall on the retry is a 504 too, and there is no third attempt. One reading of mine: before the first byte of a cold load, the window is the larger of `first_token_cold` and the profile's `stall_ms`, because otherwise a cold load under code-heavy (120 s) would get less time than a warm one.
+
+  **4.** Four readings the done-when left open
+
+  The first byte is the node's first body byte, and the client gets no headers until it arrives. A node that answers headers but no body is therefore the same stall as one that answers nothing, and a retry can still set the headers. A deadline or a client leaving writes no incident: the row's outcome records it, and incidents stay for trouble with a node, as the done-when asks for the deadline. `bytes_out` counts the node's bytes as they were handed to the client, not penfield's own error event, so it means the same on every path. An event stream cut short after bytes ends on an OpenAI error event carrying both ids, and a JSON body cut short is broken off instead, so no client takes half a body for the whole.
+
+  **5.** Outside the seam: two error kinds and three barrel lines
+
+  `wire/errors.ts` gained `bad_gateway` (502) and `gateway_timeout` (504) and exports `error_body`, so the error event inside a stream uses the same envelope as every other error. `log/index.ts` exports `log_outcome`, and `place/index.ts` exports the `Lease` and `Outcome` types the proxy names. Building also turned up four tangents, now P22 to P25: stalls are not yet counted into the node's breaker (spec §6), no node key is sent to an OpenAI-compatible node, usage is read only from event streams, and re-serializing the body can respell a number.

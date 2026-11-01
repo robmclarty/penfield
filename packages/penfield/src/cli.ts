@@ -6,7 +6,7 @@ import { create_catalogue } from './catalogue/index.js';
 import { system_clock } from './clock.js';
 import { check_config, format_issues, parse_listen, read_config } from './config/index.js';
 import type { Config, Listen } from './config/index.js';
-import { log_decision, log_incident, open_db, read_decisions } from './log/index.js';
+import { log_decision, log_incident, log_outcome, open_db, read_decisions } from './log/index.js';
 import type { Incident } from './log/index.js';
 import { create_leases, create_reaper, sweep_orphans } from './place/index.js';
 import { create_prober } from './probe/index.js';
@@ -159,8 +159,11 @@ const run_serve = async (args: string[], ctx: CliContext): Promise<number> => {
     tokens,
     snapshot: catalogue.snapshot,
     in_use: leases.in_use,
+    leases,
     clock: system_clock,
     log_decision: (decision, input) => log_decision(db, decision, input),
+    log_outcome: (id, outcome) => log_outcome(db, id, outcome),
+    incident,
     read_decisions: (query) => read_decisions(db, query),
   });
   try {

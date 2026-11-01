@@ -23,7 +23,7 @@ import { create_usage_reader, is_event_stream, sse_event } from './sse.js';
 
 const TARGET_HEADER = 'x-penfield-target';
 
-const RUNG_HEADER = 'x-penfield-rung';
+export const RUNG_HEADER = 'x-penfield-rung';
 
 // `last_byte_at` is stamped at most this often, so a long stream is not a write per chunk.
 const TOUCH_EVERY_MS = 1_000;
@@ -307,7 +307,7 @@ const relay = (leg: Leg, opened: Extract<Opened, { ok: true }>, stall_ms: number
 // ── the forward, and its one retry ────────────────────────────────────────────
 
 // Aborts when the client's connection closes before the response has ended.
-const client_signal = (reply: FastifyReply): AbortSignal => {
+export const client_signal = (reply: FastifyReply): AbortSignal => {
   const gone = new AbortController();
   const response = reply.raw;
   if (response.destroyed || response.socket?.destroyed === true) gone.abort();

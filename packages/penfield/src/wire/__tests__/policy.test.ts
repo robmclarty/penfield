@@ -5,6 +5,7 @@ import { system_clock } from '../../clock.js';
 import type { Discovery } from '../../catalogue/index.js';
 import { format_issues, load_config } from '../../config/index.js';
 import { place } from '../../place/index.js';
+import type { Leases } from '../../place/index.js';
 import type { RouteInput, RoutedProfile } from '../../route/index.js';
 import type { Caller } from '../auth.js';
 import { send_error } from '../errors.js';
@@ -13,6 +14,9 @@ import { check_policy } from '../policy.js';
 import { create_server } from '../server.js';
 
 const AT = '2026-10-31T12:00:00.000Z';
+
+// The chat routes are not reached here, so they get no lease table.
+const NO_LEASES = {} as Leases;
 
 // searle is lan with the two chat models; cloudbox is a cloud copy of the 35B, so
 // one tag sits at two privacy classes; claude is a decision node.
@@ -142,7 +146,18 @@ describe('/v1/models and the 403 read the same rule', () => {
 describe("the endpoint's answer", () => {
   test('a named model the caller may not use leaves as a 403 with the reason and the decision id', async () => {
     const tokens = new Map([['tok_night-shift_1c8e6f2b', 'night-shift']]);
-    const app = create_server({ config, tokens, snapshot: () => catalogue, in_use: () => ({}), clock: system_clock, log_decision: () => undefined, read_decisions: () => [] });
+    const app = create_server({
+      config,
+      tokens,
+      snapshot: () => catalogue,
+      in_use: () => ({}),
+      leases: NO_LEASES,
+      clock: system_clock,
+      log_decision: () => undefined,
+      log_outcome: () => undefined,
+      incident: () => undefined,
+      read_decisions: () => [],
+    });
     // What an endpoint that takes a model does: check, place, and send the refusal.
     app.post<{ Params: { model: string } }>('/named/:model', (request, reply) => {
       const routed = named(decodeURIComponent(request.params.model));

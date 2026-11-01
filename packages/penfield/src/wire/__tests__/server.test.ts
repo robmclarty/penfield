@@ -4,6 +4,7 @@ import { create_catalogue } from '../../catalogue/index.js';
 import { system_clock } from '../../clock.js';
 import { format_issues, load_config } from '../../config/index.js';
 import type { Config } from '../../config/index.js';
+import type { Leases } from '../../place/index.js';
 import { check_bind, create_server } from '../index.js';
 
 const CONFIG = `version: 1
@@ -18,8 +19,22 @@ const loaded = (text: string): Config => {
   return result.config;
 };
 
+// The chat routes are not reached here, so they get no lease table.
+const NO_LEASES = {} as Leases;
+
 const server = (config: Config, snapshot: ReturnType<typeof create_catalogue>['snapshot']) =>
-  create_server({ config, tokens: new Map(), snapshot, in_use: () => ({}), clock: system_clock, log_decision: () => undefined, read_decisions: () => [] });
+  create_server({
+    config,
+    tokens: new Map(),
+    snapshot,
+    in_use: () => ({}),
+    leases: NO_LEASES,
+    clock: system_clock,
+    log_decision: () => undefined,
+    log_outcome: () => undefined,
+    incident: () => undefined,
+    read_decisions: () => [],
+  });
 
 describe('/healthz', () => {
   test('answers 200 with no token and every configured node, unknown until the prober reports', async () => {

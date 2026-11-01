@@ -17,9 +17,15 @@ const KINDS = {
   unauthorized: { status: 401, type: 'invalid_request_error', code: 'invalid_api_key' },
   forbidden: { status: 403, type: 'permission_error', code: 'forbidden' },
   not_found: { status: 404, type: 'invalid_request_error', code: 'not_found' },
+  // The body names a model that is no alias, profile or model in the catalogue.
+  model_not_found: { status: 404, type: 'invalid_request_error', code: 'model_not_found' },
   internal: { status: 500, type: 'server_error', code: 'internal_error' },
+  // What the caller's policy asks for arrives in a later stage.
+  not_implemented: { status: 501, type: 'server_error', code: 'not_implemented' },
   // The node failed the forward: it refused the connection, or broke it.
   bad_gateway: { status: 502, type: 'server_error', code: 'upstream_error' },
+  // No candidate can take the request now: every one busy, down or refused.
+  unavailable: { status: 503, type: 'server_error', code: 'no_candidate' },
   // The node went quiet past `stall_ms`, or the forward ran out its `deadline_ms`.
   gateway_timeout: { status: 504, type: 'server_error', code: 'upstream_timeout' },
 } satisfies Record<string, Kind>;

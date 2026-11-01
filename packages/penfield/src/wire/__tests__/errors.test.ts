@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import { create_catalogue } from '../../catalogue/index.js';
 import { system_clock } from '../../clock.js';
 import { format_issues, load_config } from '../../config/index.js';
+import type { Leases } from '../../place/index.js';
 import { DECISION_HEADER, send_error } from '../errors.js';
 import { REQUEST_HEADER } from '../request_id.js';
 import { create_server } from '../server.js';
@@ -18,6 +19,9 @@ const { config } = loaded;
 
 const ROB = { authorization: 'Bearer tok_rob_5f2a9c1e' };
 
+// The chat routes are not reached here, so they get no lease table.
+const NO_LEASES = {} as Leases;
+
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/;
 
 // The server as `serve` builds it, with three routes beside its own that fail on
@@ -29,8 +33,11 @@ const server = () => {
     tokens: new Map([['tok_rob_5f2a9c1e', 'rob']]),
     snapshot: create_catalogue(config).snapshot,
     in_use: () => ({}),
+    leases: NO_LEASES,
     clock: system_clock,
     log_decision: () => undefined,
+    log_outcome: () => undefined,
+    incident: () => undefined,
     read_decisions: () => [],
   });
   app.post('/refused', (_request, reply) => send_error(reply, 'forbidden', 'caller rob may not use "claude/opus"', 'dec-1'));

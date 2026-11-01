@@ -8,10 +8,10 @@ import { authenticate } from './auth.js';
 import type { Caller, Tokens } from './auth.js';
 import { install_error_handlers, send_error } from './errors.js';
 import { healthz_body, node_health } from './healthz.js';
-import { models_list } from './openai.js';
+import { models_list, post_openai } from './openai.js';
+import type { ChatDeps } from './openai.js';
 import { mint_request_id, stamp_request_id } from './request_id.js';
 import { post_route } from './route_endpoint.js';
-import type { RouteDeps } from './route_endpoint.js';
 
 // The HTTP server. It binds what `serve` resolved and holds the routes; each route
 // gets what it reads as an argument, never from a module-level singleton (C6).
@@ -28,7 +28,7 @@ export const check_bind = (host: string, allow_any_interface: boolean): string |
 // an unknown one included, needs a caller first.
 const PUBLIC = new Set(['/healthz']);
 
-export type ServerDeps = RouteDeps & {
+export type ServerDeps = ChatDeps & {
   tokens: Tokens;
   // The decision log, newest first (`log.decisions`).
   read_decisions: (query: DecisionQuery) => DecisionRow[];
@@ -68,6 +68,8 @@ export const create_server = (deps: ServerDeps): FastifyInstance => {
   );
   app.get('/catalogue', (_request, reply) => reply.send(catalogue_body(deps.snapshot(), deps.in_use())));
   app.post('/route', (request, reply) => post_route(deps, caller_of(request), request, reply));
+  app.post('/v1/chat/completions', (request, reply) => post_openai(deps, caller_of(request), request, reply, 'chat'));
+  app.post('/v1/embeddings', (request, reply) => post_openai(deps, caller_of(request), request, reply, 'embeddings'));
   app.get('/decisions', (request, reply) => {
     const parsed = parse_decisions_query(request.query);
     if (!parsed.ok) return send_error(reply, 'bad_request', `penfield cannot read this query: ${parsed.reason}`);
