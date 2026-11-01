@@ -25,6 +25,10 @@ const loaded = (text: string) => {
   return result.config;
 };
 
+// A node that keeps at most `value` models loaded (D46).
+const loading = (value: string): string =>
+  `version: 1\nnodes:\n  box: { kind: ollama, url: http://x:1, privacy: lan, max_loaded: ${value} }\n`;
+
 const issues_of = (text: string): string[] => {
   const result = load_config(text);
   return result.ok ? [] : format_issues('penfield.yaml', result.issues).trimEnd().split('\n');
@@ -78,6 +82,12 @@ describe('the house example', () => {
       url: 'http://192.168.1.90:11434',
       pinned: ['qwen3.8:27b-mlx'],
     });
+  });
+
+  test("check-config prints searle's max_loaded as 2, the OLLAMA_MAX_LOADED_MODELS the playbook sets (D46)", async () => {
+    const result = await check_config(example);
+    expect(result).toMatchObject({ code: 0, err: '' });
+    expect(parse(result.out)).toMatchObject({ nodes: { searle: { memory_gb: 48, max_loaded: 2 } } });
   });
 });
 
@@ -195,6 +205,12 @@ describe('shape failures', () => {
     expect(issues_of(`${MINIMAL}  ${entry}\n`)).toEqual([
       `penfield.yaml:4:${col} nodes.${node}.api_key_env: a CLAUDE_ variable may hold a Claude subscription credential, which penfield never reads (C2)`,
     ]);
+  });
+
+  test('max_loaded is a positive integer (D46)', () => {
+    expect(loaded(loading('1')).nodes['box']).toMatchObject({ max_loaded: 1 });
+    expect(issues_of(loading('0'))).toEqual(['penfield.yaml:3:67 nodes.box.max_loaded: Too small: expected number to be >=1']);
+    expect(issues_of(loading('1.5'))).toEqual(['penfield.yaml:3:67 nodes.box.max_loaded: Invalid input: expected int, received number']);
   });
 
   test('an api_key_env with CLAUDE in the middle of its name loads', () => {

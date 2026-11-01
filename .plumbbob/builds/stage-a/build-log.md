@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 10 — feat(place): leases and placement (spec step 11)
+**Current step:** 21 — fix(place): a cold load never asks Ollama to evict beside a resident pin (range 4's P16)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -32,7 +32,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 7. feat(wire): caller auth, GET /catalogue and GET /v1/models (spec step 8)
 - ☑ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
 - ☑ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
-- ☐ 10. feat(place): leases and placement (spec step 11)
+- ☑ 10. feat(place): leases and placement (spec step 11)
 - ☐ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
 - ☐ 12. feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
 - ☐ 13. feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
@@ -43,6 +43,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☐ 18. feat(cli): replay re-runs the ladder over logged decisions, decisions lists them (spec step 19)
 - ☐ 19. docs: README, decisions.md and the playbook as shipped (spec step 20)
 - ☑ 20. fix(probe): readiness acts only on a hang, and the house file names searle's qwen3 4b tag (range 2's live run)
+- ☐ 21. fix(place): a cold load never asks Ollama to evict beside a resident pin (range 4's P16)
 
 ## Park list
 
@@ -65,9 +66,10 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - [x] OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form
 - [x] the house file has no vision rule or profile, so an image routes to chat's first candidate, qwen3.6:35b-mlx, whether or not it reads images; a rule on attachments: images and a vision-capable candidate list would keep a picture off a text-only model
 - [x] a system_matches pattern that does not compile is caught only when a request reaches its rule (refused then); compiling each pattern at load, (?i) included, would make it a D41 static check with a line
-- [ ] Ollama's eviction is not pin-aware and OLLAMA_MAX_LOADED_MODELS caps residency by count: a cold load that fits beside the pinned model by memory_gb can still make Ollama unload the pinned 27B when the count cap is hit or it picks the pinned one as least recent; a per-node max_loaded in placement, or keep_alive -1 on pinned models, would close it
-- [ ] searle's memory_gb is 48, but Metal's default GPU working-set limit on Apple Silicon sits below the full unified memory, so D44's fit may admit a load Ollama then splits to CPU or evicts for; set memory_gb to what Ollama reports usable, and check KV_ALLOWANCE (0.25) against /api/ps sizes on searle
-- [ ] the reaper and the proxy's own deadline timer both release at deadline_at, so a reaper tick landing first records the lease as orphaned rather than deadline; step 13 should give the reaper a grace past deadline_at, or log the outcome from the proxy whatever release returns
+- [x] Ollama's eviction is not pin-aware and OLLAMA_MAX_LOADED_MODELS caps residency by count: a cold load that fits beside the pinned model by memory_gb can still make Ollama unload the pinned 27B when the count cap is hit or it picks the pinned one as least recent; a per-node max_loaded in placement, or keep_alive -1 on pinned models, would close it
+- [x] searle's memory_gb is 48, but Metal's default GPU working-set limit on Apple Silicon sits below the full unified memory, so D44's fit may admit a load Ollama then splits to CPU or evicts for; set memory_gb to what Ollama reports usable, and check KV_ALLOWANCE (0.25) against /api/ps sizes on searle
+- [x] the reaper and the proxy's own deadline timer both release at deadline_at, so a reaper tick landing first records the lease as orphaned rather than deadline; step 13 should give the reaper a grace past deadline_at, or log the outcome from the proxy whatever release returns
+- [ ] with max_loaded 2 and both the pinned 27B and the 35B resident on searle, D46 refuses every cold load there, an embedding model included, so /v1/embeddings with auto fails until one unloads; OLLAMA_MAX_LOADED_MODELS 3 on searle, or an embedding model kept resident, would leave room
 
 ## Harvest  *(run `/plumbbob:harvest` at each step boundary, after green)*
 
@@ -103,6 +105,10 @@ Harvest results this boundary:
 - **tangent**: park 13 · OpenAI's metadata is a string-to-string map, so a typed SDK client (fascicle flows) cannot send metadata.penfield as an object; accept a JSON string there, or penfield.* string keys, beside the object form → no client sends metadata.penfield yet, and every hint has a header today
 - **tangent**: park 14 · the house file has no vision rule or profile, so an image routes to chat's first candidate, qwen3.6:35b-mlx, whether or not it reads images; a rule on attachments: images and a vision-capable candidate list would keep a picture off a text-only model → rules already match `attachments: images`, so a vision rule is a config edit you can make at any time
 - **tangent**: park 15 · a system_matches pattern that does not compile is caught only when a request reaches its rule (refused then); compiling each pattern at load, (?i) included, would make it a D41 static check with a line → the ladder already refuses a broken pattern with its reason, so a load check only moves the error earlier
+- 2026-11-01, at the step 10 boundary: 3 parked ideas, classified.
+- **blocker**: park 16 · Ollama's eviction is not pin-aware and OLLAMA_MAX_LOADED_MODELS caps residency by count: a cold load that fits beside the pinned model by memory_gb can still make Ollama unload the pinned 27B when the count cap is hit or it picks the pinned one as least recent; a per-node max_loaded in placement, or keep_alive -1 on pinned models, would close it → step 10 promises a pinned model is never evicted, but Ollama picks what to unload, so the promise holds only for the memory fit; a fix step at the head of range 5 builds it on Opus beside the placement code, before step 14 sends real traffic
+- **tangent**: park 17 · searle's memory_gb is 48, but Metal's default GPU working-set limit on Apple Silicon sits below the full unified memory, so D44's fit may admit a load Ollama then splits to CPU or evicts for; set memory_gb to what Ollama reports usable, and check KV_ALLOWANCE (0.25) against /api/ps sizes on searle → `memory_gb` is a number in the house file you can change at any time, and the usable figure needs a reading on searle, best taken at range 7's live stop when real loads run
+- **blocker**: park 18 · the reaper and the proxy's own deadline timer both release at deadline_at, so a reaper tick landing first records the lease as orphaned rather than deadline; step 13 should give the reaper a grace past deadline_at, or log the outcome from the proxy whatever release returns → step 13's done-when says the lease is released exactly once and a deadline ends as `deadline`, but its seam lacks `place/reaper.ts`, which can take the release first; fold a grace past `deadline_at` into step 13 and add the reaper to its seam
 
 ## Log
 
@@ -389,3 +395,62 @@ folder, so it rides the branch into the PR.)*
   **5.** Readiness now acts on how a ping failed, per D45
 
   The readiness call reports `hang`, `server`, `client` or `unreachable`. A 4xx is the runner answering (an embedding model refusing `generate`) and counts as nothing; a 5xx or a refused connection counts toward the model's breaker without an unload; only a hang takes `unload_on_hang`. The fake Ollama gained an embedding model that answers 400 and a crashed runner that answers 500. Counting a 4xx as nothing has one corner, P11: a model breaker opened earlier by a hang stays open while every half-open ping answers 400.
+
+- 2026-11-01 — step 10 checkpointed · 56da9737f — feat(place): leases and placement (spec step 11) (1 drift, 80m)
+
+  **Summary**: Placement and the lease table are in. `place` picks a target from live state without taking a lease. `claim` takes the lease, and under `wait` it queues in a FIFO per model. One idempotent `release` frees every lease, and the boot sweep and the reaper go through it too. Three of the rules are my reading of the plan and need your call: `wait` holds out for the top-ranked candidate, the memory fit adds a quarter of a model's weights for its KV cache, and under `avoid` a Claude decision wins over a cold local load.
+
+  1. `wait` holds out for the top-ranked candidate, and `degrade` moves to the next one with a free slot
+  2. A cold load must fit beside the pinned and leased models, with a quarter of the weights added for the KV cache
+  3. Under `avoid`, a Claude decision ranks with the resident models, ahead of a cold local load
+  4. Leases are SQLite rows, taken by one conditional insert and freed by one idempotent release, and serve now sweeps and reaps them
+  5. Smaller calls: an unprobed node is skipped, a hint can lower privacy but never raise it, and `prefer` re-ranks the candidates
+
+  **Readout**:
+
+  ```text
+  check        green: 9 of 9 checks
+  done-when    met
+  decisions    bent: D12 (placement-reads-live-state)
+               → wait holds for the top pick; allow ranks cold loads in; see 1, 3
+  constraints  17 of 17 honored
+  seam         strayed: 4 paths outside the seam
+               - packages/penfield/src/catalogue/__tests__/merge.test.ts
+               - packages/penfield/src/catalogue/index.ts
+               - packages/penfield/src/cli.ts
+               - packages/penfield/src/ui/api.ts
+  diff         +1479 -5 across 11 files
+               - packages/penfield/src/catalogue/__tests__/merge.test.ts +1 -0
+               - packages/penfield/src/catalogue/index.ts +1 -1
+               - packages/penfield/src/catalogue/merge.ts +4 -0
+               - packages/penfield/src/cli.ts +20 -3
+               - packages/penfield/src/place/__tests__/leases.test.ts +236 -0
+               - packages/penfield/src/place/__tests__/placement.test.ts +492 -0
+               - packages/penfield/src/place/index.ts +5 -0
+               - and 4 more
+  spent        80 min · 4 turns · 5s gate · green first run
+  ```
+
+  **Verdict**: ○ Out of plumb (decisions bent)
+
+  **Recommendation**: Approve the lease rules after you check the three readings in sections 1 to 3. They are where a wrong lease rule costs the most: `wait` holding out for the top-ranked model, the memory fit with its quarter-weight KV allowance, and `avoid` letting a Claude decision win over a cold load. Each is a line or two to change if you read D12 and D15 the other way. P16 is the park I would fix before Stage A ships, since Ollama can still unload the pinned 27B on its own.
+
+  **1.** `wait` holds out for the top-ranked candidate, and `degrade` moves to the next one with a free slot
+
+  D15 makes `degrade` the default for interactive callers and `wait` the default for batch. Read literally, D12 applies the busy policy only once no candidate has a slot. Then a batch caller would degrade just like an interactive one whenever candidate two was free, and `wait` would matter only when every candidate was full. I read `wait` as a batch caller choosing to hold out for its best model. When that model is busy, `place` keeps it as the target and adds a reason saying it waits. `claim` then queues in that model's FIFO for up to `wait_ms` (120 s for night-shift) and refuses with the reason once the time runs out. `degrade` takes the next candidate with a free slot and sets `degraded_from`. When no candidate is free, it refuses at once, which is the Frame's "fails fast with a clear error". The busy mode comes from the caller's `busy`, else the profile's key in `policy.busy`, else `policy.busy.default`. `wait_ms` comes from the caller, else the policy. If you read D12 the other way, the change is two lines in `choose` in `placement.ts`.
+
+  **2.** A cold load must fit beside the pinned and leased models, with a quarter of the weights added for the KV cache
+
+  Under D44, a model's footprint is its `size_bytes` on disk times 1.25 (`KV_ALLOWANCE`). A load goes ahead when its footprint, plus that of every resident model on the node that is pinned or holds a lease, fits in `memory_gb`. An idle, unpinned resident model is what a load may evict. The reason names those models, and the pinned model never appears in that list. A model that holds a lease counts as resident even if the last discovery said cold, so two quick requests are not counted as two loads. A node with no `memory_gb`, or a model with no size, can load only when nothing pinned or leased is resident. The tests use house-like sizes. With the pinned 27B resident and the 35B leased, nothing else fits on searle. With the 35B idle, a 20 GB load fits and names the 35B as the model it may evict. One gap remains: Ollama picks what to unload, and it knows nothing of penfield's pins. Under `OLLAMA_MAX_LOADED_MODELS=2`, a third model can make it unload the pinned 27B. That is parked as P16. P17 covers checking `memory_gb` against Metal's usable memory on searle.
+
+  **3.** Under `avoid`, a Claude decision ranks with the resident models, ahead of a cold local load
+
+  The done-when needs three distinct behaviours. `allow` takes the profile's rank order and treats a cold load as being as good as a resident model. `avoid` takes every candidate that can serve without a load before any cold load: a resident model, one whose residency is unknown, or a Claude decision. `never` loads nothing. D12's literal order, resident first and then cold, is `avoid`, and that is the house default. One consequence: if both local chat models are cold, rob's chat request goes to `claude/sonnet@low` rather than a 3.6 s load of the 35B. In the house file the 27B is pinned and normally resident, so this rarely happens. The other reading would rank a Claude decision after cold local loads.
+
+  **4.** Leases are SQLite rows, taken by one conditional insert and freed by one idempotent release, and serve now sweeps and reaps them
+
+  `acquire` is one `insert … select … where count < slots`, so the slot is checked and taken in a single statement. `release(id, outcome)` changes only an active row: it returns true the first time, and every later call leaves the row as it ended. It also hands the freed slot to the head of that model's queue. The boot sweep and the reaper both go through it, with outcome `orphaned` and an `orphaned` incident. A new claim never jumps the queue. A waiter leaves the queue when its `wait_ms` runs out or its `AbortSignal` fires. Outside the seam, `cli.ts` now creates the lease table and sweeps the last instance's leases before it listens. It runs the reaper with the most frequent probe, at least every 10 s. `/catalogue`'s `slots_in_use` now reads the table; the comment in `ui/api.ts` already said that would come in this step. `merge.test.ts` gains `memory_gb: null`, and `catalogue/index.ts` exports `CatalogueNode`.
+
+  **5.** Smaller calls: an unprobed node is skipped, a hint can lower privacy but never raise it, and `prefer` re-ranks the candidates
+
+  A node that has not been probed yet is skipped, which fails closed for the few milliseconds after boot. The `max_privacy` cap is the lowest of the caller's, the alias's and the request hint's, and the reason names which one set it. `prefer`, from an alias or a hint, re-sorts the candidates by the overlay's speed or quality and keeps the profile's order between ties, so `auto/best` puts `claude/sonnet` first for rob. A Claude target's effort is the request's hint when the node offers it, else the candidate's, else `medium`. Two fields go beyond spec §5.3's shape: `Decision.profile` is null when a request named a model, and `Decision.policy` carries `wait_ms` under `wait`. `place` takes the decision's id and time as an argument, so it stays pure.

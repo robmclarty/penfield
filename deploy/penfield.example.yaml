@@ -16,6 +16,7 @@ nodes:
     privacy: lan
     discover: true
     memory_gb: 48
+    max_loaded: 2                                    # as OLLAMA_MAX_LOADED_MODELS on searle (playbook §1)
     slots: { default: 2, "qwen3.8:27b-mlx": 1 }      # tune: the 27B dense is slow; one at a time
     pinned: [qwen3.8:27b-mlx]                        # nurselog depends on it being warm
     probe: { every_ms: 10000, timeout_ms: 3000, ready_prompt: true }

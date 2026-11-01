@@ -73,10 +73,15 @@ const loaded = (text: string): Config => {
 
 const config = loaded(CONFIG);
 
-const with_cold_load = (cold_load: Config['policy']['cold_load']): Config => ({
-  ...config,
-  policy: { ...config.policy, cold_load },
+const with_cold_load = (cold_load: Config['policy']['cold_load'], base: Config = config): Config => ({
+  ...base,
+  policy: { ...base.policy, cold_load },
 });
+
+// searle with room for any three of its models, so only a count can refuse a load,
+// and the same with Ollama's cap at two, as the playbook sets it (D46).
+const spacious = loaded(CONFIG.replace('memory_gb: 48', 'memory_gb: 96'));
+const capped = loaded(CONFIG.replace('memory_gb: 48', 'memory_gb: 96\n    max_loaded: 2'));
 
 const QWEN35 = 'searle/qwen3.6:35b-mlx';
 const QWEN27 = 'searle/qwen3.8:27b-mlx';
@@ -108,10 +113,10 @@ const hume = (phi4: 'resident' | 'cold' = 'resident'): Discovery => ({
   ],
 });
 
-type House = { searle?: Discovery; hume?: Discovery; breakers?: Breakers };
+type House = { searle?: Discovery; hume?: Discovery; breakers?: Breakers; config?: Config };
 
-const house = ({ searle: s = searle(), hume: h = hume(), breakers = { nodes: {}, models: {} } }: House = {}): Catalogue =>
-  merge_catalogue(config, {
+const house = ({ searle: s = searle(), hume: h = hume(), breakers = { nodes: {}, models: {} }, config: c = config }: House = {}): Catalogue =>
+  merge_catalogue(c, {
     seen: {
       searle: { discovery: s, at: AT },
       hume: { discovery: h, at: AT },
@@ -245,11 +250,13 @@ describe('the busy policy', () => {
 
 describe('cold loads', () => {
   test('cold_load allow takes the first candidate even when it is cold', () => {
-    const decision = decide(to_profile('summarize'), 'rob', { config: with_cold_load('allow') });
+    // The pinned 27B is not loaded, so the load fits beside the resident 35B.
+    const unpinned = house({ searle: searle(['qwen3.6:35b-mlx']) });
+    const decision = decide(to_profile('summarize'), 'rob', { config: with_cold_load('allow'), catalogue: unpinned });
     expect(target_ref(decision)).toBe(GEMMA);
     expect(decision.placement).toEqual({ resident: false, cold_load: true, waited_ms: 0 });
     expect(decision.reasons.at(-1)).toBe(
-      `place: chose ${GEMMA}, a cold load: 20.0 GB beside 20.0 GB pinned or leased in 48 GB fits; it may evict idle ${QWEN35}; 2 of 2 slots free`,
+      `place: chose ${GEMMA}, a cold load: 20.0 GB beside 0.0 GB pinned or leased in 48 GB fits; 2 of 2 slots free`,
     );
   });
 
@@ -272,29 +279,37 @@ describe('cold loads', () => {
 
   test('a load that would evict the pinned model is refused; the pinned model is never named for eviction', () => {
     const decision = decide(to_profile('wide'), 'rob', { config: with_cold_load('allow') });
-    // 30 GB would fit alone in 48, but not beside the pinned 27B's 20.
+    // 30 GB would fit alone in 48, but not beside the pinned 27B's 20 and the 35B's 25.
     expect(skipped(decision)).toEqual([
-      `place: skipped ${MISTRAL}: it is cold, and a load 30.0 GB beside 20.0 GB pinned or leased in 48 GB does not fit, and ${QWEN27} must stay`,
+      `place: skipped ${MISTRAL}: it is cold, and a load 30.0 GB beside 45.0 GB resident in 48 GB does not fit, and nothing may be evicted while pinned ${QWEN27} is resident`,
     ]);
     expect(target_ref(decision)).toBe(QWEN35);
+    const unpinned = decide(to_profile('wide'), 'rob', { config: with_cold_load('allow'), catalogue: house({ searle: searle(['qwen3.6:35b-mlx']) }) });
     const gemma = decide(to_profile('summarize'), 'rob', { config: with_cold_load('allow') });
-    expect(gemma.reasons.join('\n')).not.toMatch(/evict[^\n]*qwen3\.8/);
+    expect([...unpinned.reasons, ...gemma.reasons].join('\n')).not.toMatch(/may evict idle[^\n]*qwen3\.8/);
   });
 
-  test("a load that does not fit beside the node's leased models is refused (D44)", () => {
-    // The 35B holds a lease, so it must stay: 20 + 20 pinned + 25 leased is over 48.
-    const decision = decide(to_profile('summarize'), 'rob', { config: with_cold_load('allow'), in_use: { [QWEN35]: 1 } });
-    expect(skipped(decision)).toEqual([
-      `place: skipped ${GEMMA}: it is cold, and a load 20.0 GB beside 45.0 GB pinned or leased in 48 GB does not fit, and ${QWEN27}, ${QWEN35} must stay`,
+  test("with no pin resident, a load must still fit beside the node's leased models (D44)", () => {
+    // The pinned 27B is not loaded. The idle 35B may go; once it holds a lease it must stay.
+    const allow = with_cold_load('allow');
+    const unpinned = house({ searle: searle(['qwen3.6:35b-mlx']) });
+    const idle = decide(to_profile('wide'), 'rob', { config: allow, catalogue: unpinned });
+    expect(target_ref(idle)).toBe(MISTRAL);
+    expect(idle.reasons.at(-1)).toBe(
+      `place: chose ${MISTRAL}, a cold load: 30.0 GB beside 0.0 GB pinned or leased in 48 GB fits; it may evict idle ${QWEN35}; 2 of 2 slots free`,
+    );
+    const leased = decide(to_profile('wide'), 'rob', { config: allow, catalogue: unpinned, in_use: { [QWEN35]: 1 } });
+    expect(skipped(leased)).toEqual([
+      `place: skipped ${MISTRAL}: it is cold, and a load 30.0 GB beside 25.0 GB pinned or leased in 48 GB does not fit, and ${QWEN35} must stay`,
     ]);
-    expect(target_ref(decision)).toBe(QWEN35);
+    expect(target_ref(leased)).toBe(QWEN35);
   });
 
   test('a node with no memory_gb loads only when nothing pinned or leased is resident', () => {
     const allow = with_cold_load('allow');
     const pinned = decide(to_profile('local'), 'rob', { config: allow });
     expect(skipped(pinned)).toEqual([
-      'place: skipped hume/llama4:scout: it is cold, and a load node hume has no memory_gb, so a load could evict pinned or leased hume/phi4:14b',
+      'place: skipped hume/llama4:scout: it is cold, and a load could evict pinned hume/phi4:14b, since node hume has no memory_gb',
     ]);
     expect(target_ref(pinned)).toBe('hume/phi4:14b');
     const empty = decide(to_profile('local'), 'rob', { config: allow, catalogue: house({ hume: hume('cold') }) });
@@ -307,6 +322,72 @@ describe('cold loads', () => {
     const decision = decide(to_profile('summarize'), 'rob', { catalogue: stale, in_use: { [GEMMA]: 1 } });
     expect(target_ref(decision)).toBe(GEMMA);
     expect(decision.placement).toEqual({ resident: true, cold_load: false, waited_ms: 0 });
+  });
+});
+
+describe('a resident pin, and the count Ollama keeps loaded (D46)', () => {
+  test('with a pin resident, a load that fits beside the pinned and leased models but not beside every resident one is refused, then the busy policy takes over', () => {
+    const allow = with_cold_load('allow');
+    // 20 GB fits beside the pinned 27B's 20, which D44 alone would admit, but not
+    // beside the idle 35B's 25 as well, and Ollama could pick the 27B to unload.
+    const decision = decide(to_profile('summarize'), 'rob', { config: allow });
+    expect(skipped(decision)).toEqual([
+      `place: skipped ${GEMMA}: it is cold, and a load 20.0 GB beside 45.0 GB resident in 48 GB does not fit, and nothing may be evicted while pinned ${QWEN27} is resident`,
+    ]);
+    expect(target_ref(decision)).toBe(QWEN35);
+    // With the 35B full, rob, who degrades, has nothing left, and night-shift waits for it.
+    const full = { [QWEN35]: 2 };
+    expect(target_ref(decide(to_profile('summarize'), 'rob', { config: allow, in_use: full }))).toMatch(/^refused: every candidate is busy/);
+    const waiting = decide(to_profile('summarize'), 'night-shift', { config: allow, in_use: full });
+    expect(target_ref(waiting)).toBe(QWEN35);
+    expect(waiting.reasons).toContain(`place: ${QWEN35} is busy, 2 of 2 slots held; it waits up to 120000 ms for a slot`);
+  });
+
+  test('at max_loaded 2 with two resident, a load is refused while one is pinned, and with no pin resident goes ahead only when one is idle', () => {
+    const allow = with_cold_load('allow', capped);
+    // 96 GB holds all three, so only the count refuses.
+    const pinned = decide(to_profile('summarize'), 'rob', { config: allow, catalogue: house({ config: capped }) });
+    expect(skipped(pinned)).toEqual([
+      `place: skipped ${GEMMA}: it is cold, and a load would make 3 resident, over max_loaded 2, and nothing may be evicted while pinned ${QWEN27} is resident`,
+    ]);
+    expect(target_ref(pinned)).toBe(QWEN35);
+    // The 27B not loaded, the 35B and the 24B are: Ollama unloads an idle one first.
+    const unpinned = house({ config: capped, searle: searle(['qwen3.6:35b-mlx', 'mistral-small:24b']) });
+    const one_idle = decide(to_profile('summarize'), 'rob', { config: allow, catalogue: unpinned, in_use: { [MISTRAL]: 1 } });
+    expect(target_ref(one_idle)).toBe(GEMMA);
+    expect(one_idle.reasons.at(-1)).toBe(
+      `place: chose ${GEMMA}, a cold load: 20.0 GB beside 30.0 GB pinned or leased in 96 GB fits; it may evict idle ${QWEN35}; 2 of 2 slots free`,
+    );
+    const none_idle = decide(to_profile('summarize'), 'rob', { config: allow, catalogue: unpinned, in_use: { [MISTRAL]: 1, [QWEN35]: 1 } });
+    expect(skipped(none_idle)).toEqual([
+      `place: skipped ${GEMMA}: it is cold, and a load would make 3 resident, over max_loaded 2, and ${QWEN35}, ${MISTRAL} must stay`,
+    ]);
+    expect(target_ref(none_idle)).toBe(QWEN35);
+  });
+
+  test('a model holding a lease counts toward the cap', () => {
+    const allow = with_cold_load('allow', capped);
+    // Discovery saw only the pinned 27B; a lease on the 35B says it is loaded too.
+    const stale = house({ config: capped, searle: searle(['qwen3.8:27b-mlx']) });
+    const alone = decide(to_profile('summarize'), 'rob', { config: allow, catalogue: stale });
+    expect(alone.reasons.at(-1)).toBe(
+      `place: chose ${GEMMA}, a cold load: 20.0 GB beside 20.0 GB resident in 96 GB fits with 2 of max_loaded 2, so nothing is evicted beside pinned ${QWEN27}; 2 of 2 slots free`,
+    );
+    const leased = decide(to_profile('summarize'), 'rob', { config: allow, catalogue: stale, in_use: { [QWEN35]: 1 } });
+    expect(skipped(leased)).toEqual([
+      `place: skipped ${GEMMA}: it is cold, and a load would make 3 resident, over max_loaded 2, and nothing may be evicted while pinned ${QWEN27} is resident`,
+    ]);
+    expect(target_ref(leased)).toBe(QWEN35);
+  });
+
+  test('a node without max_loaded has no count rule', () => {
+    const three = house({ config: spacious, searle: searle(['qwen3.8:27b-mlx', 'qwen3.6:35b-mlx', 'mistral-small:24b']) });
+    expect(three.nodes.find(({ name }) => name === 'searle')).toMatchObject({ memory_gb: 96, max_loaded: null });
+    const decision = decide(to_profile('summarize'), 'rob', { config: with_cold_load('allow', spacious), catalogue: three });
+    expect(target_ref(decision)).toBe(GEMMA);
+    expect(decision.reasons.at(-1)).toBe(
+      `place: chose ${GEMMA}, a cold load: 20.0 GB beside 75.0 GB resident in 96 GB fits, so nothing is evicted beside pinned ${QWEN27}; 2 of 2 slots free`,
+    );
   });
 });
 

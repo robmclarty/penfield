@@ -167,32 +167,48 @@ const footprint = (models: readonly CatalogueModel[]): number | null =>
     0,
   );
 
+// A refusal's reason opens on "a load"; a fit's is what the chosen load costs.
 type Fit = { ok: boolean; reason: string };
 
-// D44: a cold load fits beside the node's resident models that are pinned or
-// leased, which a load must never evict (D14); an idle unpinned one may go.
+const refs = (models: readonly CatalogueModel[]): string => models.map(({ ref }) => ref).join(', ');
+
+// D44: a cold load fits beside the resident models that must stay, which a load
+// must never evict (D14); an idle one may go. D46: Ollama, not penfield, picks
+// the model a load unloads and knows nothing of pins, so while a pinned model is
+// resident every resident model must stay, and the load must need no eviction at
+// all, by memory or by the node's `max_loaded`.
 const fit_of = (model: CatalogueModel, node: CatalogueNode, ctx: Context): Fit => {
   const resident = ctx.catalogue.models.filter(
     (each) => each.node === model.node && each.ref !== model.ref && is_resident(each, ctx.in_use),
   );
-  const kept = resident.filter((each) => each.pinned || held_of(ctx.in_use, each.ref) > 0);
-  const idle = resident.filter((each) => !kept.includes(each)).map(({ ref }) => ref);
-  const named = kept.map(({ ref }) => ref).join(', ');
+  const pins = resident.filter(({ pinned }) => pinned);
+  const stay = pins.length > 0 ? resident : resident.filter((each) => held_of(ctx.in_use, each.ref) > 0);
+  const idle = resident.filter((each) => !stay.includes(each));
+  const kept = pins.length > 0 ? `nothing may be evicted while pinned ${refs(pins)} is resident` : `${refs(stay) || 'nothing'} must stay`;
   const need = footprint([model]);
-  const beside = footprint(kept);
+  const beside = footprint(stay);
   if (node.memory_gb === null || need === null || beside === null) {
     const unknown = node.memory_gb === null ? `node ${node.name} has no memory_gb` : 'a model size is unknown';
-    return kept.length === 0
-      ? { ok: true, reason: `nothing pinned or leased is resident (${unknown})` }
-      : { ok: false, reason: `${unknown}, so a load could evict pinned or leased ${named}` };
+    if (stay.length === 0) return { ok: true, reason: `nothing pinned or leased is resident (${unknown})` };
+    const could = pins.length > 0 ? `pinned ${refs(pins)}` : `leased ${refs(stay)}`;
+    return { ok: false, reason: `a load could evict ${could}, since ${unknown}` };
   }
   const room = node.memory_gb * GB;
+  const sizes = `${gb(need)} beside ${gb(beside)} ${pins.length > 0 ? 'resident' : 'pinned or leased'} in ${node.memory_gb} GB`;
+  if (need + beside > room) return { ok: false, reason: `a load ${sizes} does not fit, and ${kept}` };
+  // How many the load must make Ollama unload to stay under the cap.
+  const cap = node.max_loaded;
+  const over = cap === null ? 0 : resident.length + 1 - cap;
+  if (over > idle.length) {
+    return { ok: false, reason: `a load would make ${resident.length + 1} resident, over max_loaded ${cap}, and ${kept}` };
+  }
+  if (pins.length > 0) {
+    const under = cap === null ? '' : ` with ${resident.length + 1} of max_loaded ${cap}`;
+    return { ok: true, reason: `${sizes} fits${under}, so nothing is evicted beside pinned ${refs(pins)}` };
+  }
   const all = footprint(resident);
-  const evicts = idle.length > 0 && (all === null || need + all > room) ? `; it may evict idle ${idle.join(', ')}` : '';
-  const sizes = `${gb(need)} beside ${gb(beside)} pinned or leased in ${node.memory_gb} GB`;
-  return need + beside <= room
-    ? { ok: true, reason: `${sizes} fits${evicts}` }
-    : { ok: false, reason: `${sizes} does not fit, and ${named || 'nothing'} must stay` };
+  const evicts = idle.length > 0 && (over > 0 || all === null || need + all > room) ? `; it may evict idle ${refs(idle)}` : '';
+  return { ok: true, reason: `${sizes} fits${evicts}` };
 };
 
 const CLAUDE_MODELS: readonly string[] = ['haiku', 'sonnet', 'opus'] satisfies ClaudeModel[];
@@ -299,7 +315,7 @@ const cold_reasons = (options: readonly Option[], cold_load: Context['cold_load'
   options.flatMap((option) => {
     if (!option.cold) return [];
     if (cold_load === 'never') return [`place: skipped ${option.ref}: it is cold, and cold_load is never`];
-    if (!option.loadable) return [`place: skipped ${option.ref}: it is cold, and a load ${option.fit ?? 'cannot be sized'}`];
+    if (!option.loadable) return [`place: skipped ${option.ref}: it is cold, and ${option.fit ?? 'a load cannot be sized'}`];
     return [];
   });
 

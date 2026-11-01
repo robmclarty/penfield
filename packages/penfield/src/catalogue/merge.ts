@@ -43,9 +43,10 @@ export type CatalogueNode = {
   formats: Format[];
   // What a decision node offers; empty elsewhere.
   efforts: Effort[];
-  // The memory its models may use, for placement's cold-load fit (D44); null when
-  // the file leaves it out.
+  // The memory its models may use and the most it keeps loaded, for placement's
+  // cold-load fit (D44, D46); null when the file leaves them out.
   memory_gb: number | null;
+  max_loaded: number | null;
   enabled: boolean;
   // `unknown` until the first discovery; a decision node is never contacted, so it is up.
   state: 'up' | 'down' | 'unknown';
@@ -164,18 +165,22 @@ const state_of = (entry: NodeConfig, seen: Seen | undefined): Pick<CatalogueNode
     : { state: 'down', reason: discovery.reason, discovered_at: at };
 };
 
-const to_node = (name: string, entry: NodeConfig, seen: Seen | undefined, breakers: Breakers): CatalogueNode => ({
-  name,
-  kind: entry.kind,
-  privacy: entry.privacy,
-  url: entry.kind === 'ollama' || entry.kind === 'openai_compatible' ? entry.url : null,
-  formats: entry.kind === 'claude_decision' ? [] : [...entry.formats],
-  efforts: entry.kind === 'claude_decision' ? [...entry.efforts] : [],
-  memory_gb: entry.kind === 'ollama' || entry.kind === 'openai_compatible' ? (entry.memory_gb ?? null) : null,
-  enabled: entry.kind === 'anthropic_api' ? entry.enabled : true,
-  ...state_of(entry, seen),
-  breaker: breakers.nodes[name] ?? 'closed',
-});
+const to_node = (name: string, entry: NodeConfig, seen: Seen | undefined, breakers: Breakers): CatalogueNode => {
+  const served = entry.kind === 'ollama' || entry.kind === 'openai_compatible';
+  return {
+    name,
+    kind: entry.kind,
+    privacy: entry.privacy,
+    url: served ? entry.url : null,
+    formats: entry.kind === 'claude_decision' ? [] : [...entry.formats],
+    efforts: entry.kind === 'claude_decision' ? [...entry.efforts] : [],
+    memory_gb: served ? (entry.memory_gb ?? null) : null,
+    max_loaded: served ? (entry.max_loaded ?? null) : null,
+    enabled: entry.kind === 'anthropic_api' ? entry.enabled : true,
+    ...state_of(entry, seen),
+    breaker: breakers.nodes[name] ?? 'closed',
+  };
+};
 
 // ── warnings (D41) ────────────────────────────────────────────────────────────
 

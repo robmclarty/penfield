@@ -13,6 +13,8 @@ nodes:
     kind: ollama
     url: http://searle.test:11434
     privacy: lan
+    memory_gb: 48
+    max_loaded: 2
     slots: { default: 2, "qwen3.8:27b-mlx": 1, nomic-embed-text: 4 }
     pinned: [qwen3.8:27b-mlx]
   closet:
@@ -127,12 +129,22 @@ describe('nodes and their models', () => {
       formats: [],
       efforts: ['low', 'high'],
       memory_gb: null,
+      max_loaded: null,
       enabled: true,
       state: 'up',
       reason: null,
       discovered_at: null,
       breaker: 'closed',
     });
+  });
+
+  test("a node's memory_gb and max_loaded reach the snapshot, null where the file leaves them out", () => {
+    const sizes = merged(searle_up).nodes.map(({ name, memory_gb, max_loaded }) => [name, memory_gb, max_loaded]);
+    expect(sizes).toEqual([
+      ['searle', 48, 2],
+      ['closet', null, null],
+      ['claude', null, null],
+    ]);
   });
 
   test('a pinned model is marked, and nothing else is', () => {

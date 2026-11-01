@@ -107,6 +107,8 @@ const served = {
   probe,
   recover,
   memory_gb: z.number().positive().optional(),
+  // The most models the node keeps loaded at once, as `OLLAMA_MAX_LOADED_MODELS` (D46).
+  max_loaded: z.int().min(1).optional(),
   api_key_env: env_name.optional(),
 };
 
