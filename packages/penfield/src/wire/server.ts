@@ -1,16 +1,17 @@
 import { fastify } from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
-import type { Catalogue } from '../catalogue/index.js';
-import type { Config, Listen } from '../config/index.js';
-import { catalogue_body } from '../ui/index.js';
-import type { InUse } from '../ui/index.js';
+import type { Listen } from '../config/index.js';
+import type { DecisionQuery, DecisionRow } from '../log/index.js';
+import { catalogue_body, decisions_body, parse_decisions_query } from '../ui/index.js';
 import { authenticate } from './auth.js';
 import type { Caller, Tokens } from './auth.js';
 import { install_error_handlers, send_error } from './errors.js';
 import { healthz_body, node_health } from './healthz.js';
 import { models_list } from './openai.js';
 import { mint_request_id, stamp_request_id } from './request_id.js';
+import { post_route } from './route_endpoint.js';
+import type { RouteDeps } from './route_endpoint.js';
 
 // The HTTP server. It binds what `serve` resolved and holds the routes; each route
 // gets what it reads as an argument, never from a module-level singleton (C6).
@@ -27,11 +28,10 @@ export const check_bind = (host: string, allow_any_interface: boolean): string |
 // an unknown one included, needs a caller first.
 const PUBLIC = new Set(['/healthz']);
 
-export type ServerDeps = {
-  config: Config;
+export type ServerDeps = RouteDeps & {
   tokens: Tokens;
-  snapshot: () => Catalogue;
-  in_use: () => InUse;
+  // The decision log, newest first (`log.decisions`).
+  read_decisions: (query: DecisionQuery) => DecisionRow[];
 };
 
 export const create_server = (deps: ServerDeps): FastifyInstance => {
@@ -67,6 +67,12 @@ export const create_server = (deps: ServerDeps): FastifyInstance => {
     reply.send(models_list(deps.snapshot(), deps.config, caller_of(request))),
   );
   app.get('/catalogue', (_request, reply) => reply.send(catalogue_body(deps.snapshot(), deps.in_use())));
+  app.post('/route', (request, reply) => post_route(deps, caller_of(request), request, reply));
+  app.get('/decisions', (request, reply) => {
+    const parsed = parse_decisions_query(request.query);
+    if (!parsed.ok) return send_error(reply, 'bad_request', `penfield cannot read this query: ${parsed.reason}`);
+    return reply.send(decisions_body(deps.read_decisions(parsed.query)));
+  });
   return app;
 };
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { create_catalogue } from '../../catalogue/index.js';
+import { system_clock } from '../../clock.js';
 import { format_issues, load_config } from '../../config/index.js';
 import { DECISION_HEADER, send_error } from '../errors.js';
 import { REQUEST_HEADER } from '../request_id.js';
@@ -23,7 +24,15 @@ const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/;
 // purpose, as later endpoints will: a decision refused for its policy, a body
 // Fastify cannot read, and a bug.
 const server = () => {
-  const app = create_server({ config, tokens: new Map([['tok_rob_5f2a9c1e', 'rob']]), snapshot: create_catalogue(config).snapshot, in_use: () => ({}) });
+  const app = create_server({
+    config,
+    tokens: new Map([['tok_rob_5f2a9c1e', 'rob']]),
+    snapshot: create_catalogue(config).snapshot,
+    in_use: () => ({}),
+    clock: system_clock,
+    log_decision: () => undefined,
+    read_decisions: () => [],
+  });
   app.post('/refused', (_request, reply) => send_error(reply, 'forbidden', 'caller rob may not use "claude/opus"', 'dec-1'));
   app.post('/echo', (request, reply) => reply.send(request.body));
   app.get('/broken', () => {

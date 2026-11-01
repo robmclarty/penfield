@@ -25,7 +25,8 @@ create table if not exists decisions (
   first_byte_ms int, total_ms int, bytes_out int, upstream_status int,
   prompt text,                  -- JSON of text and system_text, only under the caller's keep_prompts
   input text,                   -- the RouteInput as JSON, without text and system_text (D31)
-  upstream_prompt_tokens int    -- the node's own prompt count, beside tokens_estimate (Q4)
+  upstream_prompt_tokens int,   -- the node's own prompt count, beside tokens_estimate (Q4)
+  policy text                   -- the Decision's policy as JSON (D43)
 );
 create index if not exists decisions_at on decisions (at);
 create index if not exists decisions_caller_at on decisions (caller, at);
@@ -44,9 +45,26 @@ create table if not exists incidents (
   detail text
 );
 create index if not exists incidents_at on incidents (at);
-
-pragma user_version = 1;
 `;
+
+// What each schema version adds to the one before, by the version it reaches. A
+// new file is created whole by SETUP and only stamped with the latest.
+const MIGRATIONS: readonly { version: number; statement: string }[] = [
+  { version: 2, statement: 'alter table decisions add column policy text' },
+];
+
+const LATEST = 2;
+
+const version_of = (sql: DatabaseSync): number => Number(sql.prepare('pragma user_version').get()?.['user_version'] ?? 0);
+
+// SETUP's `if not exists` leaves an older file's tables as they were, so a file
+// stamped before the latest takes each migration it lacks, in order.
+const migrate = (sql: DatabaseSync): void => {
+  const from = version_of(sql);
+  if (from >= LATEST) return;
+  for (const { version, statement } of MIGRATIONS) if (from > 0 && version > from) sql.exec(statement);
+  sql.exec(`pragma user_version = ${LATEST}`);
+};
 
 type SqlValue = string | number | bigint | null;
 
@@ -70,6 +88,7 @@ export const open_db = (state_dir: string): Db => {
   const file = join(state_dir, DB_FILE);
   const sql = new DatabaseSync(file);
   sql.exec(SETUP);
+  migrate(sql);
   const statements = new Map<string, StatementSync>();
   const prepared = (text: string): StatementSync => {
     const cached = statements.get(text);

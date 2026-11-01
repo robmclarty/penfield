@@ -13,7 +13,7 @@ step boundaries. The antidote to "my plan got lost in the noise."
 
 # Build log: Stage A: auto by rules, any client
 
-**Current step:** 11 — feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
+**Current step:** 12 — feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
 **Heavy check:** checkride (set a "check" key in .plumbbob/settings.json to override)
 
 ## Steps
@@ -33,7 +33,7 @@ check green + checkpoint taken, via `/plumbbob:verify` or `/plumbbob:build`.)*
 - ☑ 8. feat(route): RouteInput from OpenAI chat and embeddings bodies (spec step 9)
 - ☑ 9. feat(route): the explicit, alias, shape, rule and default rungs and the ladder (spec step 10)
 - ☑ 10. feat(place): leases and placement (spec step 11)
-- ☐ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
+- ☑ 11. feat(wire): request ids, the error envelope and fail-closed policy (spec step 13)
 - ☐ 12. feat(wire): POST /route decides dry, logs the row, GET /decisions reads it (spec step 12)
 - ☐ 13. feat(wire): the streaming proxy with stall, deadline and abort (spec step 14)
 - ☐ 14. feat(wire): chat completions and embeddings end to end (spec step 15)
@@ -456,3 +456,4 @@ folder, so it rides the branch into the PR.)*
   A node that has not been probed yet is skipped, which fails closed for the few milliseconds after boot. The `max_privacy` cap is the lowest of the caller's, the alias's and the request hint's, and the reason names which one set it. `prefer`, from an alias or a hint, re-sorts the candidates by the overlay's speed or quality and keeps the profile's order between ties, so `auto/best` puts `claude/sonnet` first for rob. A Claude target's effort is the request's hint when the node offers it, else the candidate's, else `medium`. Two fields go beyond spec §5.3's shape: `Decision.profile` is null when a request named a model, and `Decision.policy` carries `wait_ms` under `wait`. `place` takes the decision's id and time as an argument, so it stays pure.
 
 - 2026-11-01 — step 21 checkpointed · 9b4926bd6 — fix(place): a cold load never asks Ollama to evict beside a resident pin (range 4's P16) (7m)
+- 2026-11-01 — step 11 checkpointed · ed659904a — feat(wire): request ids, the error envelope and fail-closed policy (spec step 13) (1 drift, 6m)

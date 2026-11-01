@@ -11,5 +11,5 @@ export type {
   NodeConfig,
   Privacy,
 } from './config/index.js';
-export { DB_FILE, open_db } from './log/index.js';
-export type { Db, Row } from './log/index.js';
+export { DB_FILE, log_decision, open_db, read_decisions } from './log/index.js';
+export type { Db, DecisionQuery, DecisionRow, Row } from './log/index.js';

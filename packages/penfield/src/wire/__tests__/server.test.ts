@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { create_catalogue } from '../../catalogue/index.js';
+import { system_clock } from '../../clock.js';
 import { format_issues, load_config } from '../../config/index.js';
 import type { Config } from '../../config/index.js';
 import { check_bind, create_server } from '../index.js';
@@ -18,7 +19,7 @@ const loaded = (text: string): Config => {
 };
 
 const server = (config: Config, snapshot: ReturnType<typeof create_catalogue>['snapshot']) =>
-  create_server({ config, tokens: new Map(), snapshot, in_use: () => ({}) });
+  create_server({ config, tokens: new Map(), snapshot, in_use: () => ({}), clock: system_clock, log_decision: () => undefined, read_decisions: () => [] });
 
 describe('/healthz', () => {
   test('answers 200 with no token and every configured node, unknown until the prober reports', async () => {

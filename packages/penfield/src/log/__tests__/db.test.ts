@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, beforeEach, expect, test } from 'vitest';
 
@@ -47,7 +48,7 @@ test('the journal is WAL', () => {
   expect(open().get('pragma journal_mode')).toEqual({ journal_mode: 'wal' });
 });
 
-test("the tables carry spec §5.5's columns, with D31's on decisions", () => {
+test("the tables carry spec §5.5's columns, with D31's and D43's on decisions", () => {
   const db = open();
   expect(columns(db, 'decisions')).toEqual([
     'id', 'request_id', 'at', 'caller', 'profile', 'rung',
@@ -57,13 +58,31 @@ test("the tables carry spec §5.5's columns, with D31's on decisions", () => {
     'outcome',
     'first_byte_ms', 'total_ms', 'bytes_out', 'upstream_status',
     'prompt', 'input', 'upstream_prompt_tokens',
+    'policy',
   ]);
   expect(columns(db, 'leases')).toEqual([
     'id', 'request_id', 'decision_id', 'caller', 'node', 'model',
     'instance', 'started_at', 'last_byte_at', 'deadline_at', 'state',
   ]);
   expect(columns(db, 'incidents')).toEqual(['id', 'at', 'node', 'model', 'kind', 'detail']);
-  expect(db.get('pragma user_version')).toEqual({ user_version: 1 });
+  expect(db.get('pragma user_version')).toEqual({ user_version: 2 });
+});
+
+test("a file from user_version 1 gains D43's policy column and keeps its rows", () => {
+  const file = join(dir, DB_FILE);
+  const old = new DatabaseSync(file);
+  old.exec(`create table decisions (id text primary key, at text, caller text);
+insert into decisions (id, at, caller) values ('dec-0', '2026-10-31T10:00:00.000Z', 'rob');
+pragma user_version = 1;`);
+  old.close();
+  const db = open();
+  expect(columns(db, 'decisions').at(-1)).toBe('policy');
+  expect(db.all('select id, policy from decisions')).toEqual([{ id: 'dec-0', policy: null }]);
+  expect(db.get('pragma user_version')).toEqual({ user_version: 2 });
+  db.close();
+  opened = [];
+  // A second open finds nothing left to migrate.
+  expect(open().get('pragma user_version')).toEqual({ user_version: 2 });
 });
 
 test('a state dir that does not exist yet is created', () => {

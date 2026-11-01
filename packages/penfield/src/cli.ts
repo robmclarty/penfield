@@ -6,7 +6,7 @@ import { create_catalogue } from './catalogue/index.js';
 import { system_clock } from './clock.js';
 import { check_config, format_issues, parse_listen, read_config } from './config/index.js';
 import type { Config, Listen } from './config/index.js';
-import { log_incident, open_db } from './log/index.js';
+import { log_decision, log_incident, open_db, read_decisions } from './log/index.js';
 import type { Incident } from './log/index.js';
 import { create_leases, create_reaper, sweep_orphans } from './place/index.js';
 import { create_prober } from './probe/index.js';
@@ -154,7 +154,15 @@ const run_serve = async (args: string[], ctx: CliContext): Promise<number> => {
   // The last boot's leases died with it (spec §6).
   sweep_orphans(reaping);
   const reaper = create_reaper({ ...reaping, every_ms: reap_every(config) });
-  const app = create_server({ config, tokens, snapshot: catalogue.snapshot, in_use: leases.in_use });
+  const app = create_server({
+    config,
+    tokens,
+    snapshot: catalogue.snapshot,
+    in_use: leases.in_use,
+    clock: system_clock,
+    log_decision: (decision, input) => log_decision(db, decision, input),
+    read_decisions: (query) => read_decisions(db, query),
+  });
   try {
     const address = await start_server(app, listen);
     ctx.out.write(banner(resolved, address, db.instance_id));
